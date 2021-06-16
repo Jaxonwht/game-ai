@@ -5,7 +5,7 @@ from typing import Iterable, Dict, Tuple, List
 
 from torch import Tensor
 
-from game_definitions.game import Game
+from game_definition.game import Game
 
 class PlayerRole(Enum):
     LANDLORD = 0

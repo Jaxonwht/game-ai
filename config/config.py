@@ -8,4 +8,12 @@ class Config:
 
     @property
     def train_playout_times(self) -> int:
-        return self.data.get("playout_times", 1)
+        return self.data.get("playout_times", 100)
+
+    @property
+    def train_iterations(self) -> int:
+        return self.data.get("train_iterations", 100)
+
+    @property
+    def learning_rate(self) -> float:
+        return self.data.get("learning_rate", 1.0e-3)

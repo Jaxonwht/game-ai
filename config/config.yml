@@ -1,1 +1,3 @@
-playout_times: 800
+train_playout_times: 800
+train_iterations: 1000
+learning_rate: 1.0e-3

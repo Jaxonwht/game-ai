@@ -3,7 +3,7 @@ from math import sqrt
 
 import torch
 
-from game_definitions.game import Game
+from game_definition.game import Game
 from model.model import Model
 
 class StateNode:
@@ -24,18 +24,14 @@ class MCTSController:
     def empirical_p(self) -> torch.Tensor:
         p = torch.empty(self.game.number_possible_moves)
         for move, child_node in self.root.children.items():
-            p[move] = child_node.visit_count / self.root.visit_count
-        return p
-
-    @property
-    def computed_pv(self) -> Tuple[torch.Tensor, float]:
-        return self.root.p, self.root.v
+            p[move] = child_node.visit_count
+        return p / torch.sum(p)
 
     def simulate(self, count: int) -> None:
         for _ in range(count):
-            self.search(self.root)
+            self._search(self.root)
 
-    def search(self, node: StateNode) -> float:
+    def _search(self, node: StateNode) -> float:
         if self.game.over:
             return self.game.score
 
@@ -61,7 +57,7 @@ class MCTSController:
                 max_u, best_move = child_u, move
 
         self.game.make_move(best_move)
-        next_val = self.search(node.children[best_move])
+        next_val = self._search(node.children[best_move])
         self.game.undo_move(best_move)
 
         node.value_sum += next_val
