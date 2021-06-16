@@ -1,0 +1,47 @@
+from abc import ABC, abstractmethod
+from typing import Iterable
+
+from torch import Tensor
+
+class Game(ABC):
+    @abstractmethod
+    def start(self) -> None:
+        pass
+
+    @property
+    @abstractmethod
+    def available_moves(self) -> Iterable[int]:
+        pass
+
+    @abstractmethod
+    def make_move(self, move: int) -> None:
+        pass
+
+    @abstractmethod
+    def undo_move(self, move: int) -> None:
+        pass
+
+    @property
+    @abstractmethod
+    def game_state(self) -> Tensor:
+        pass
+
+    @property
+    @abstractmethod
+    def over(self) -> bool:
+        pass
+
+    @property
+    @abstractmethod
+    def score(self) -> int:
+        pass
+
+    @property
+    @abstractmethod
+    def number_possible_moves(self) -> int:
+        pass
+
+    @property
+    @abstractmethod
+    def desire_positive_score(self) -> bool:
+        pass
