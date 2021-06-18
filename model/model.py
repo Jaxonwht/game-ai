@@ -4,8 +4,8 @@ import torch
 import torch.nn as nn
 
 class Model:
-    def __init__(self, module: nn.Module, learning_rate: float) -> None:
-        self.module: nn.Module = module
+    def __init__(self, module: nn.Module, learning_rate: float, device: str) -> None:
+        self.module: nn.Module = module.to(device)
         self.optimizer = torch.optim.Adam(self.module.parameters(), lr=learning_rate)
         self.module.eval()
         self.mse_loss = torch.nn.MSELoss(reduction="mean")

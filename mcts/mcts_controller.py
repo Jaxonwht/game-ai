@@ -22,7 +22,7 @@ class MCTSController:
 
     @property
     def empirical_p(self) -> torch.Tensor:
-        p = torch.empty(self.game.number_possible_moves)
+        p = torch.zeros(self.game.number_possible_moves, dtype=torch.int64)
         for move, child_node in self.root.children.items():
             p[move] = child_node.visit_count
         return p / torch.sum(p)
@@ -52,7 +52,8 @@ class MCTSController:
                 node.children[move] = child_node
                 self.game.undo_move(move)
             child_node_val = child_node.v if desire_positive_score else -child_node.v
-            child_u = child_node_val + float(node.p[move].item()) * sqrt(node.visit_count) / (1 + child_node.visit_count)
+            child_visit_counts_total = sum(i.visit_count for i in node.children.values())
+            child_u = child_node_val + float(node.p[move].item()) * sqrt(child_visit_counts_total) / (1 + child_node.visit_count)
             if child_u > max_u:
                 max_u, best_move = child_u, move
 
