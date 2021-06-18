@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Iterable
+from typing import List
 
 from torch import Tensor
 
@@ -10,7 +10,7 @@ class Game(ABC):
 
     @property
     @abstractmethod
-    def available_moves(self) -> Iterable[int]:
+    def available_moves(self) -> List[int]:
         pass
 
     @abstractmethod
