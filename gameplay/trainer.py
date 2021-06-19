@@ -7,6 +7,7 @@ from game_definition.game import Game
 from mcts.mcts_controller import MCTSController
 from model.model import Model
 
+
 class GameTrainer:
     def __init__(self, game: Game, model: Model, config: Config) -> None:
         self.model: Model = model

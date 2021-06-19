@@ -1,11 +1,16 @@
 from abc import ABC, abstractmethod
-from typing import List
+from typing import List, Tuple
 
 from torch import Tensor
 
 class Game(ABC):
     @abstractmethod
     def start(self) -> None:
+        pass
+
+    @property
+    @abstractmethod
+    def state_dimension(self) -> Tuple[int, int]:
         pass
 
     @property
