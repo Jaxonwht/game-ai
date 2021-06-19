@@ -9,6 +9,7 @@ from model.model import Model
 
 
 class GameTrainer:
+    # pylint: disable=too-few-public-methods
     def __init__(self, game: Game, model: Model, config: Config) -> None:
         self.model: Model = model
         self.config: Config = config

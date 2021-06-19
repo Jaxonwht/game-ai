@@ -12,19 +12,18 @@ from model.model import Model
 
 if __name__ == "__main__":
     parser: argparse.ArgumentParser = argparse.ArgumentParser()
-    parser.add_argument("name", help="Name of the game to play", metavar="GAME_NAME", type=str)
+    parser.add_argument("name", choices=["landlord"], help="Name of the game to play", metavar="GAME_NAME", type=str)
     parser.add_argument("--recompute_moves", action="store_true", help="Recompute all the moves of Landlord game")
     args = parser.parse_args()
     config: Config = Config()
 
     if args.name == "landlord":
         MOVES_BIN = "data/landlord/moves.bin"
-        MOVES_BACK_REF_BIN = "data/landlord/moves_back_ref.bin"
 
         device: str = "cuda" if torch.cuda.is_available() else "cpu"
 
         print("Initialize game")
-        landlord = Landlord(MOVES_BIN, MOVES_BACK_REF_BIN, torch_device=device)
+        landlord = Landlord(MOVES_BIN, torch_device=device)
         if args.recompute_moves:
             landlord.recompute_moves()
 

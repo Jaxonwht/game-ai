@@ -4,7 +4,7 @@ import pickle
 from enum import Enum
 from collections import Counter
 from typing import Iterable, Dict, Tuple, List
-from multiprocessing import Manager, Process, Lock
+from multiprocessing import Manager, Process
 
 import torch
 from torch import Tensor
@@ -45,7 +45,7 @@ class PlayerRole(Enum):
 
 class Landlord(Game):
     # pylint: disable=too-many-instance-attributes
-    def __init__(self, moves_bin: str, moves_back_ref_bin: str, torch_device: str) -> None:
+    def __init__(self, moves_bin: str, torch_device: str) -> None:
         self.internal_moves: List[MoveInternal] = []
         self.internal_moves_back_ref: Dict[MoveInternal, int] = {}
         self.moves: List[Tuple[int, PlayerRole]] = []
@@ -53,15 +53,11 @@ class Landlord(Game):
         self.hands: Tuple[List[int], List[int], List[int]] = ([], [], [])
         self.current_role: PlayerRole = PlayerRole.LANDLORD
         self.moves_bin = moves_bin
-        self.moves_back_ref_bin = moves_back_ref_bin
         self.torch_device = torch_device
         try:
             with open(moves_bin, "rb") as file:
-                moves = pickle.load(file)
-            with open(moves_back_ref_bin, "rb") as file:
-                moves_back_ref = pickle.load(file)
-            self.internal_moves = moves
-            self.moves_back_ref = moves_back_ref
+                self.internal_moves = pickle.load(file)
+            self.internal_moves_back_ref = {move: index for index, move in enumerate(self.internal_moves)}
         except Exception:  # pylint: disable=broad-except
             print("Does not load moves data from persistent storage")
             self.recompute_moves()
@@ -83,53 +79,43 @@ class Landlord(Game):
         return hand
 
     @staticmethod
-    def _add_move(
-        move: MoveInternal, moves: List[MoveInternal], moves_back_ref: Dict[MoveInternal, int], process_lock
-    ) -> None:
-        with process_lock:
-            index = len(moves)
-            moves.append(move)
-            moves_back_ref[move] = index
-
-    @staticmethod
-    def _add_simple_combinations(
-        moves: List[MoveInternal], moves_back_ref: Dict[MoveInternal, int], process_lock
-    ) -> None:
+    def _add_simple_combinations(moves: List[MoveInternal]) -> None:
         # single card
         for i in range(15):
-            Landlord._add_move(Single(i, {i: 1}), moves, moves_back_ref, process_lock)
+            moves.append(Single(i, {i: 1}))
         # double cards
         for i in range(13):
-            Landlord._add_move(Double(i, {i: 2}), moves, moves_back_ref, process_lock)
+            moves.append(Double(i, {i: 2}))
         # triple cards
         for i in range(13):
-            Landlord._add_move(Triple(i, {i: 3}), moves, moves_back_ref, process_lock)
+            moves.append(Triple(i, {i: 3}))
         # four cards
         for i in range(13):
-            Landlord._add_move(Four(i, {i: 4}), moves, moves_back_ref, process_lock)
+            moves.append(Four(i, {i: 4}))
+            moves.append(ThreePlusOne(i, {i : 4}))
         for i, j in itertools.permutations(range(13), 2):
             # 3 + 1
-            Landlord._add_move(ThreePlusOne(i, {i: 3, j: 1}), moves, moves_back_ref, process_lock)
+            moves.append((ThreePlusOne(i, {i: 3, j: 1})))
             # 3 + 2
-            Landlord._add_move(ThreePlusTwo(i, {i: 3, j: 2}), moves, moves_back_ref, process_lock)
+            moves.append(ThreePlusTwo(i, {i: 3, j: 2}))
         for i in range(13):
             # 3 + gray joker
-            Landlord._add_move(ThreePlusOne(i, {i: 3, 13: 1}), moves, moves_back_ref, process_lock)
+            moves.append(ThreePlusOne(i, {i: 3, 13: 1}))
             # 3 + color joker
-            Landlord._add_move(ThreePlusOne(i, {i: 3, 14: 1}), moves, moves_back_ref, process_lock)
+            moves.append(ThreePlusOne(i, {i: 3, 14: 1}))
         # double joker
-        Landlord._add_move(DoubleJoker(), moves, moves_back_ref, process_lock)
+        moves.append(DoubleJoker())
 
     @staticmethod
-    def _add_four_card_combinations(moves: List[MoveInternal], moves_back_ref: Dict[MoveInternal, int], process_lock):
+    def _add_four_card_combinations(moves: List[MoveInternal]) -> None:
         # 4 + 2
         for i in range(13):
             # 4 + 1 + 1
             for j, k in itertools.combinations(itertools.chain(range(i), range(i + 1, 15)), 2):  # type: ignore
-                Landlord._add_move(FourPlusTwo(i, {i: 4, j: 1, k: 1}), moves, moves_back_ref, process_lock)
+                moves.append(FourPlusTwo(i, {i: 4, j: 1, k: 1}))
             # 4 + 2
             for j in itertools.chain(range(i), range(i + 1, 13)):
-                Landlord._add_move(FourPlusTwo(i, {i: 4, j: 2}), moves, moves_back_ref, process_lock)
+                moves.append(FourPlusTwo(i, {i: 4, j: 2}))
         # 4 + 2 + 2
         for i in range(13):
             for j in itertools.combinations_with_replacement(  # type: ignore
@@ -139,31 +125,25 @@ class Landlord(Game):
                 double_pairs: Counter = Counter(j)  # type: ignore
                 double_pairs.update(double_pairs)
                 double_pairs.update({i: 4})
-                Landlord._add_move(FourPlusTwoPairs(i, double_pairs), moves, moves_back_ref, process_lock)
+                moves.append(FourPlusTwoPairs(i, double_pairs))
 
     @staticmethod
-    def _add_straight_combinations(moves: List[MoveInternal], moves_back_ref: Dict[MoveInternal, int], process_lock):
+    def _add_straight_combinations(moves: List[MoveInternal]) -> None:
         # straight
         for i in range(9):
             for j in range(5, 13 - i):
-                Landlord._add_move(
-                    Straight(i, i + j - 1, {k: 1 for k in range(i, i + j)}), moves, moves_back_ref, process_lock
-                )
+                moves.append(Straight(i, i + j - 1, {k: 1 for k in range(i, i + j)}))
         # double straight
         for i in range(10):
             for j in range(3, min(13 - i, 11)):
-                Landlord._add_move(
-                    DoubleStraight(i, i + j - 1, {k: 2 for k in range(i, i + j)}), moves, moves_back_ref, process_lock
-                )
+                moves.append(DoubleStraight(i, i + j - 1, {k: 2 for k in range(i, i + j)}))
         # triple straight
         for i in range(11):
             for j in range(2, min(13 - i, 7)):
-                Landlord._add_move(
-                    TripleStraight(i, i + j - 1, {k: 3 for k in range(i, i + j)}), moves, moves_back_ref, process_lock
-                )
+                moves.append(TripleStraight(i, i + j - 1, {k: 3 for k in range(i, i + j)}))
 
     @staticmethod
-    def _add_airplane_combinations(moves: List[MoveInternal], moves_back_ref: Dict[MoveInternal, int], process_lock):
+    def _add_airplane_combinations(moves: List[MoveInternal]) -> None:
         # straight 3 + 1s
         for i in range(11):
             for j in range(2, min(13 - i, 6)):
@@ -171,11 +151,7 @@ class Landlord(Game):
                     ones: Counter = Counter(k)
                     ones.update({m: 3 for m in range(i, i + j)})
                     if max(ones.values()) <= 4 and ones[13] <= 1 and ones[14] <= 1:
-                        Landlord._add_move(TripleStraightPlusOnes(
-                            i,
-                            i + j - 1,
-                            ones
-                        ), moves, moves_back_ref, process_lock)
+                        moves.append(TripleStraightPlusOnes(i, i + j - 1, ones))
         # straight 3 + 2s
         for i in range(11):
             for j in range(2, min(13 - i, 5)):
@@ -187,41 +163,37 @@ class Landlord(Game):
                     twos.update(twos)
                     twos.update({m: 3 for m in range(i, i + j)})
                     if max(twos.values()) <= 4:
-                        Landlord._add_move(TripleStraightPlusTwos(
-                            i,
-                            i + j - 1,
-                            twos
-                        ), moves, moves_back_ref, process_lock)
+                        moves.append(TripleStraightPlusTwos(i, i + j - 1, twos))
 
     def recompute_moves(self) -> None:
         # pylint: disable=too-many-branches
         print("Recompute moves data for the Landlord game")
         with Manager() as manager:
             moves = manager.list()  # type: ignore
-            moves_back_ref = manager.dict()  # type: ignore
-            process_lock = Lock()
             processes: List[Process] = []
             # skip move
             moves.append(Skip())
-            moves_back_ref[Skip()] = 0
             processes.extend((
-                Process(target=Landlord._add_simple_combinations, args=(moves, moves_back_ref, process_lock)),
-                Process(target=Landlord._add_four_card_combinations, args=(moves, moves_back_ref, process_lock)),
-                Process(target=Landlord._add_straight_combinations, args=(moves, moves_back_ref, process_lock)),
-                Process(target=Landlord._add_airplane_combinations, args=(moves, moves_back_ref, process_lock))
+                Process(target=Landlord._add_simple_combinations, args=(moves, )),
+                Process(target=Landlord._add_four_card_combinations, args=(moves,)),
+                Process(target=Landlord._add_straight_combinations, args=(moves,)),
+                Process(target=Landlord._add_airplane_combinations, args=(moves,))
             ))
             for process in processes:
                 process.start()
             for process in processes:
                 process.join()
-            self.internal_moves = list(moves)
-            self.moves_back_ref = list(moves_back_ref)
 
+            # remove possible duplicates
+            self.internal_moves = list(set(moves))
+            self.internal_moves_back_ref = {move: index for index, move in enumerate(self.internal_moves)}
+
+        counter = Counter(self.internal_moves)
+        for move in filter(lambda x: counter[x] > 1, counter):
+            print(repr(move))
         print("Storing Landlord moves data")
         with open(self.moves_bin, "wb") as file:
             pickle.dump(self.internal_moves, file)
-        with open(self.moves_back_ref_bin, "wb") as file:
-            pickle.dump(self.moves_back_ref, file)
 
     def start(self) -> None:
         self.moves = []
@@ -301,13 +273,15 @@ class Landlord(Game):
             last_card = last_move.dominant_card
             for i in range(last_card + 1, 13):
                 for j in range(15):
-                    three_plus_one: ThreePlusOne = ThreePlusOne(i, {i: 3, j: 1})
+                    counter = Counter((j,))
+                    counter.update({i: 3})
+                    three_plus_one: ThreePlusOne = ThreePlusOne(i, counter)
                     if Landlord.hand_contains_move(hand, three_plus_one):
                         moves.append(self.internal_moves_back_ref[three_plus_one])
         elif last_move_type == MoveType.THREE_PLUS_TWO:
             last_card = last_move.dominant_card
             for i in range(last_card + 1, 13):
-                for j in itertools.chain(range(last_card), range(last_card + 1, 13)):
+                for j in itertools.chain(range(last_card), range(last_card + 1, i - 1), range(i + 1, 13)):
                     three_plus_two: ThreePlusTwo = ThreePlusTwo(i, {i: 3, j: 2})
                     if Landlord.hand_contains_move(hand, three_plus_two):
                         moves.append(self.internal_moves_back_ref[three_plus_two])

@@ -39,6 +39,9 @@ class MoveInternal(ABC):
             *(self.dict_form.get(i, 0) for i in range(15))
         ))
 
+    def __repr__(self) -> str:
+        return f"MoveInternal(type: {self.move_type.name}, dict: {self.dict_form})"
+
     @property
     def tuple_form(self) -> Tuple[int, ...]:
         return tuple(self.dict_form.get(i, 0) for i in range(15))
