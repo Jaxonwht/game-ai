@@ -45,7 +45,7 @@ class PlayerRole(Enum):
 
 class Landlord(Game):
     # pylint: disable=too-many-instance-attributes
-    def __init__(self, moves_bin: str, moves_back_ref_bin: str) -> None:
+    def __init__(self, moves_bin: str, moves_back_ref_bin: str, torch_device: str) -> None:
         self.internal_moves: List[MoveInternal] = []
         self.internal_moves_back_ref: Dict[MoveInternal, int] = {}
         self.moves: List[Tuple[int, PlayerRole]] = []
@@ -54,12 +54,13 @@ class Landlord(Game):
         self.current_role: PlayerRole = PlayerRole.LANDLORD
         self.moves_bin = moves_bin
         self.moves_back_ref_bin = moves_back_ref_bin
+        self.torch_device = torch_device
         try:
             with open(moves_bin, "rb") as file:
                 moves = pickle.load(file)
             with open(moves_back_ref_bin, "rb") as file:
                 moves_back_ref = pickle.load(file)
-            self.moves = moves
+            self.internal_moves = moves
             self.moves_back_ref = moves_back_ref
         except Exception:  # pylint: disable=broad-except
             print("Does not load moves data from persistent storage")
@@ -213,12 +214,12 @@ class Landlord(Game):
                 process.start()
             for process in processes:
                 process.join()
-            self.moves = list(moves)
+            self.internal_moves = list(moves)
             self.moves_back_ref = list(moves_back_ref)
 
         print("Storing Landlord moves data")
         with open(self.moves_bin, "wb") as file:
-            pickle.dump(self.moves, file)
+            pickle.dump(self.internal_moves, file)
         with open(self.moves_back_ref_bin, "wb") as file:
             pickle.dump(self.moves_back_ref, file)
 
@@ -445,12 +446,12 @@ class Landlord(Game):
             cards_on_field: Tensor = torch.zeros(15, dtype=torch.int64)
         else:
             cards_on_field = torch.tensor(self.internal_moves[self.moves[-1][0]].tuple_form)
-        state = torch.stack((state, cards_on_field.unsqueeze(0)))
+        state = torch.vstack((state, cards_on_field.unsqueeze(0)))
 
         role_col: Tensor = torch.zeros(state.size()[0], dtype=torch.int64)
         role_col[self.current_role.value] = 1
 
-        return torch.hstack((state, role_col.unsqueeze(1)))
+        return torch.hstack((state, role_col.unsqueeze(1))).to(device=self.torch_device, dtype=torch.float)
 
     @property
     def over(self) -> bool:

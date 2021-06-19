@@ -21,8 +21,10 @@ if __name__ == "__main__":
         MOVES_BIN = "data/landlord/moves.bin"
         MOVES_BACK_REF_BIN = "data/landlord/moves_back_ref.bin"
 
+        device: str = "cuda" if torch.cuda.is_available() else "cpu"
+
         print("Initialize game")
-        landlord = Landlord(MOVES_BIN, MOVES_BACK_REF_BIN)
+        landlord = Landlord(MOVES_BIN, MOVES_BACK_REF_BIN, torch_device=device)
         if args.recompute_moves:
             landlord.recompute_moves()
 
@@ -35,7 +37,6 @@ if __name__ == "__main__":
             landlord.number_possible_moves + 1
         )
 
-        device: str = "cuda" if torch.cuda.is_available() else "cpu"
         landlord_model: Model = Model(landlord_module, config.learning_rate, device)
 
         print("Initialize game trainer")
