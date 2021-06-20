@@ -4,7 +4,7 @@ import pickle
 from enum import Enum
 from collections import Counter
 from typing import Iterable, Dict, Tuple, List
-from multiprocessing import Manager, Process
+from multiprocessing import Manager, Process, Pool
 
 import torch
 from torch import Tensor
@@ -45,7 +45,7 @@ class PlayerRole(Enum):
 
 class Landlord(Game):
     # pylint: disable=too-many-instance-attributes
-    def __init__(self, moves_bin: str, torch_device: str) -> None:
+    def __init__(self, moves_bin: str, valid_moves_bin: str, torch_device: str) -> None:
         self.internal_moves: List[MoveInternal] = []
         self.internal_moves_back_ref: Dict[MoveInternal, int] = {}
         self.moves: List[Tuple[int, PlayerRole]] = []
@@ -53,14 +53,22 @@ class Landlord(Game):
         self.hands: Tuple[List[int], List[int], List[int]] = ([], [], [])
         self.current_role: PlayerRole = PlayerRole.LANDLORD
         self.moves_bin = moves_bin
+        self.valid_moves_bin = valid_moves_bin
         self.torch_device = torch_device
+        self.valid_moves = []
         try:
-            with open(moves_bin, "rb") as file:
-                self.internal_moves = pickle.load(file)
-            self.internal_moves_back_ref = {move: index for index, move in enumerate(self.internal_moves)}
+            with open(moves_bin, "rb") as moves_bin_file:
+                self.internal_moves = pickle.load(moves_bin_file)
+                self.internal_moves_back_ref = {move: index for index, move in enumerate(self.internal_moves)}
         except Exception:  # pylint: disable=broad-except
             print("Does not load moves data from persistent storage")
             self.recompute_moves()
+        try:
+            with open(valid_moves_bin, "rb") as valid_moves_bin_file:
+                self.valid_moves = pickle.load(valid_moves_bin_file)
+        except Exception:  # pylint: disable=broad-except
+            print("Does not load valid moves data from persistent storage")
+            self.recompute_valid_moves()
 
     @staticmethod
     def _init_hands() -> Tuple[List[int], List[int], List[int]]:
@@ -92,7 +100,7 @@ class Landlord(Game):
         # four cards
         for i in range(13):
             moves.append(Four(i, {i: 4}))
-            moves.append(ThreePlusOne(i, {i : 4}))
+            moves.append(ThreePlusOne(i, {i: 4}))
         for i, j in itertools.permutations(range(13), 2):
             # 3 + 1
             moves.append((ThreePlusOne(i, {i: 3, j: 1})))
@@ -188,12 +196,26 @@ class Landlord(Game):
             self.internal_moves = list(set(moves))
             self.internal_moves_back_ref = {move: index for index, move in enumerate(self.internal_moves)}
 
-        counter = Counter(self.internal_moves)
-        for move in filter(lambda x: counter[x] > 1, counter):
-            print(repr(move))
         print("Storing Landlord moves data")
         with open(self.moves_bin, "wb") as file:
             pickle.dump(self.internal_moves, file)
+
+    def recompute_valid_moves(self) -> None:
+        print("Recompute valid moves data for the Landlord game")
+        total_move_count = len(self.internal_moves)
+        self.valid_moves = [[] for _ in range(total_move_count)]
+        with Pool() as pool:
+            for index, move_list in pool.imap_unordered(
+                    self._compute_valid_move,
+                    # randomize input because differnet moves take very different time
+                    random.sample(range(total_move_count), total_move_count),
+                    chunksize=10
+            ):
+                self.valid_moves[index] = move_list
+
+        print("Storing Landlord valid moves data")
+        with open(self.valid_moves_bin, "wb") as file:
+            pickle.dump(self.valid_moves, file)
 
     def start(self) -> None:
         self.moves = []
@@ -209,82 +231,61 @@ class Landlord(Game):
     def hand_contains_move(hand: List[int], move: MoveInternal) -> bool:
         return all(hand[i] >= v for i, v in move.dict_form.items())
 
-    @property
-    def available_moves(self) -> List[int]:
-        # pylint: disable=too-many-branches,too-many-locals,too-many-statements
-        hand: List[int] = self.hands[self.current_role.value]
-        moves: List[int] = []
-        if not self.moves or self.moves[-1][1] == self.current_role:
-            for index, internal_move in enumerate(self.internal_moves):
-                if Landlord.hand_contains_move(hand, internal_move):
-                    moves.append(index)
-            return moves
+    def _compute_valid_move(self, move_index: int) -> Tuple[int, List[int]]:
+        # pylint: disable=too-many-branches, too-many-locals, too-many-statements
+        if not move_index:
+            return move_index, list(range(len(self.internal_moves)))
 
-        last_move_index: int = self.moves[-1][0]
-        last_move: MoveInternal = self.internal_moves[last_move_index]
+        last_move: MoveInternal = self.internal_moves[move_index]
         last_move_type: MoveType = last_move.move_type
 
+        moves = set()
+
         # skip turn
-        moves.append(0)
+        moves.add(0)
 
         # only skip for double joker
         if last_move_type == MoveType.DOUBLE_JOKER:
-            return moves
+            return move_index, list(moves)
 
         # double joker always a valid move
-        double_joker: MoveInternal = DoubleJoker()
-        if Landlord.hand_contains_move(hand, double_joker):
-            moves.append(self.internal_moves_back_ref[double_joker])
+        moves.add(self.internal_moves_back_ref[DoubleJoker()])
 
         if last_move_type == MoveType.FOUR:
             last_card: int = last_move.dominant_card
             # four cards
             for i in range(last_card + 1, 13):
-                four: Four = Four(i, {i: 4})
-                if Landlord.hand_contains_move(hand, four):
-                    moves.append(self.internal_moves_back_ref[four])
-            return moves
+                moves.add(self.internal_moves_back_ref[Four(i, {i: 4})])
+            return move_index, list(moves)
 
         # four cards always a valid move
         for i in range(13):
-            four = Four(i, {i: 4})
-            if Landlord.hand_contains_move(hand, four):
-                moves.append(self.internal_moves_back_ref[four])
+            moves.add(self.internal_moves_back_ref[Four(i, {i: 4})])
 
         if last_move_type == MoveType.SINGLE:
             last_card = last_move.dominant_card
             for i in range(last_card + 1, 15):
-                single: Single = Single(i, {i: 1})
-                if Landlord.hand_contains_move(hand, single):
-                    moves.append(self.internal_moves_back_ref[single])
+                moves.add(self.internal_moves_back_ref[Single(i, {i: 1})])
         elif last_move_type == MoveType.DOUBLE:
             last_card = last_move.dominant_card
             for i in range(last_card + 1, 13):
-                double: Double = Double(i, {i: 2})
-                if Landlord.hand_contains_move(hand, double):
-                    moves.append(self.internal_moves_back_ref[double])
+                moves.add(self.internal_moves_back_ref[Double(i, {i: 2})])
         elif last_move_type == MoveType.TRIPLE:
             last_card = last_move.dominant_card
             for i in range(last_card + 1, 13):
-                triple: Triple = Triple(i, {i: 3})
-                if Landlord.hand_contains_move(hand, triple):
-                    moves.append(self.internal_moves_back_ref[triple])
+                moves.add(self.internal_moves_back_ref[Triple(i, {i: 3})])
         elif last_move_type == MoveType.THREE_PLUS_ONE:
             last_card = last_move.dominant_card
             for i in range(last_card + 1, 13):
                 for j in range(15):
                     counter = Counter((j,))
                     counter.update({i: 3})
-                    three_plus_one: ThreePlusOne = ThreePlusOne(i, counter)
-                    if Landlord.hand_contains_move(hand, three_plus_one):
-                        moves.append(self.internal_moves_back_ref[three_plus_one])
+                    moves.add(self.internal_moves_back_ref[ThreePlusOne(i, counter)])
         elif last_move_type == MoveType.THREE_PLUS_TWO:
             last_card = last_move.dominant_card
             for i in range(last_card + 1, 13):
-                for j in itertools.chain(range(last_card), range(last_card + 1, i - 1), range(i + 1, 13)):
-                    three_plus_two: ThreePlusTwo = ThreePlusTwo(i, {i: 3, j: 2})
-                    if Landlord.hand_contains_move(hand, three_plus_two):
-                        moves.append(self.internal_moves_back_ref[three_plus_two])
+                for j in itertools.chain(range(last_card), range(last_card + 1, i), range(i + 1, 13)):
+                    moves.add(self.internal_moves_back_ref[ThreePlusTwo(i, {i: 3, j: 2})])
         elif last_move_type == MoveType.STRAIGHT:
             start, end = last_move.range
             # last_card_end + i < 12
@@ -294,8 +295,7 @@ class Landlord(Game):
                     end + i,
                     {j: 1 for j in range(start + i, end + i + 1)}
                 )
-                if Landlord.hand_contains_move(hand, straight):
-                    moves.append(self.internal_moves_back_ref[straight])
+                moves.add(self.internal_moves_back_ref[straight])
         elif last_move_type == MoveType.DOUBLE_STRAIGHT:
             start, end = last_move.range
             # last_card_end + i < 12
@@ -305,8 +305,7 @@ class Landlord(Game):
                     end + i,
                     {j: 2 for j in range(start + i, end + i + 1)}
                 )
-                if Landlord.hand_contains_move(hand, double_straight):
-                    moves.append(self.internal_moves_back_ref[double_straight])
+                moves.add(self.internal_moves_back_ref[double_straight])
         elif last_move_type == MoveType.TRIPLE_STRAIGHT:
             start, end = last_move.range
             # last_card_start + i >= last_card_end + 1
@@ -317,8 +316,7 @@ class Landlord(Game):
                     end + i,
                     {j: 3 for j in range(start + i, end + i + 1)}
                 )
-                if Landlord.hand_contains_move(hand, triple_straight):
-                    moves.append(self.internal_moves_back_ref[triple_straight])
+                moves.add(self.internal_moves_back_ref[triple_straight])
         elif last_move_type == MoveType.TRIPLE_STRAIGHT_PLUS_ONES:
             start, end = last_move.range
             for i in range(end - start + 1, 12 - end):
@@ -332,8 +330,7 @@ class Landlord(Game):
                         end + i,
                         ones
                     )
-                    if Landlord.hand_contains_move(hand, straight_ones):
-                        moves.append(self.internal_moves_back_ref[straight_ones])
+                    moves.add(self.internal_moves_back_ref[straight_ones])
         elif last_move_type == MoveType.TRIPLE_STRAIGHT_PLUS_TWOS:
             start, end = last_move.range
             for i in range(end - start + 1, 12 - end):
@@ -351,8 +348,7 @@ class Landlord(Game):
                         end + i,
                         twos
                     )
-                    if Landlord.hand_contains_move(hand, straight_twos):
-                        moves.append(self.internal_moves_back_ref[straight_twos])
+                    moves.add(self.internal_moves_back_ref[straight_twos])
         elif last_move_type == MoveType.FOUR_PLUS_TWO:
             card: int = last_move.dominant_card
             for i in range(card + 1, 13):
@@ -360,15 +356,11 @@ class Landlord(Game):
                     range(card),
                     range(i + 1, 15)
                 ), 2):
-                    four_plus_two: FourPlusTwo = FourPlusTwo(i, {i: 4, j: 1, k: 1})
-                    if Landlord.hand_contains_move(hand, four_plus_two):
-                        moves.append(self.internal_moves_back_ref[four_plus_two])
+                    moves.add(self.internal_moves_back_ref[FourPlusTwo(i, {i: 4, j: 1, k: 1})])
                 for j in itertools.chain(range(card), range(i + 1, 13)):
-                    four_plus_pair: FourPlusTwo = FourPlusTwo(i, {i: 4, j: 2})
-                    if Landlord.hand_contains_move(hand, four_plus_pair):
-                        moves.append(self.internal_moves_back_ref[four_plus_pair])
+                    moves.add(self.internal_moves_back_ref[FourPlusTwo(i, {i: 4, j: 2})])
         elif last_move_type == MoveType.FOUR_PLUS_TWO_PAIRS:
-            card_four: int = last_move.dominant_card
+            card_four = last_move.dominant_card
             for i in range(card_four + 1, 13):
                 for j in itertools.combinations_with_replacement(  # type: ignore
                     itertools.chain(range(card_four), range(i + 1, 13)), 2
@@ -376,11 +368,25 @@ class Landlord(Game):
                     double_pairs: Counter = Counter(j)  # type: ignore
                     double_pairs.update(double_pairs)
                     double_pairs.update({i: 4})
-                    four_plus_two_pairs: FourPlusTwoPairs = FourPlusTwoPairs(
-                        i, double_pairs
-                    )
-                    if Landlord.hand_contains_move(hand, four_plus_two_pairs):
-                        moves.append(self.internal_moves_back_ref[four_plus_two_pairs])
+                    moves.add(self.internal_moves_back_ref[FourPlusTwoPairs(i, double_pairs)])
+        return move_index, list(moves)
+
+    @property
+    def available_moves(self) -> List[int]:
+        hand = self.hands[self.current_role.value]
+        moves = []
+        if not self.moves or self.moves[-1][1] == self.current_role:
+            for index, internal_move in enumerate(self.internal_moves):
+                if Landlord.hand_contains_move(hand, internal_move):
+                    moves.append(index)
+            return moves
+
+        last_move_index = self.moves[-1][0]
+        valid_moves = self.valid_moves[last_move_index]
+
+        for valid_move_index in valid_moves:
+            if Landlord.hand_contains_move(hand, self.internal_moves[valid_move_index]):
+                moves.append(valid_move_index)
         return moves
 
     def make_move(self, move: int) -> None:

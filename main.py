@@ -14,18 +14,26 @@ if __name__ == "__main__":
     parser: argparse.ArgumentParser = argparse.ArgumentParser()
     parser.add_argument("name", choices=["landlord"], help="Name of the game to play", metavar="GAME_NAME", type=str)
     parser.add_argument("--recompute_moves", action="store_true", help="Recompute all the moves of Landlord game")
+    parser.add_argument(
+        "--recompute_valid_moves",
+        action="store_true",
+        help="Recompute all the valid moves of Landlord game"
+    )
     args = parser.parse_args()
     config: Config = Config()
 
     if args.name == "landlord":
         MOVES_BIN = "data/landlord/moves.bin"
+        VALID_MOVES_BIN = "data/landlord/valid_moves.bin"
 
         device: str = "cuda" if torch.cuda.is_available() else "cpu"
 
         print("Initialize game")
-        landlord = Landlord(MOVES_BIN, torch_device=device)
+        landlord = Landlord(MOVES_BIN, VALID_MOVES_BIN, torch_device=device)
         if args.recompute_moves:
             landlord.recompute_moves()
+        if args.recompute_valid_moves:
+            landlord.recompute_valid_moves()
 
         row_size, col_size = landlord.state_dimension
         print("Initialize pytorch nn model")
@@ -42,7 +50,8 @@ if __name__ == "__main__":
         landlord_trainer: GameTrainer = GameTrainer(
             landlord,
             landlord_model,
-            config
+            config,
+            device
         )
 
         print("Start training")

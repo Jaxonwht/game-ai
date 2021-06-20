@@ -6,6 +6,7 @@ import torch.nn as nn
 
 class Model:
     def __init__(self, module: nn.Module, learning_rate: float, device: str) -> None:
+        self.device = device
         self.module: nn.Module = module.to(device)
         self.optimizer = torch.optim.Adam(self.module.parameters(), lr=learning_rate)
         self.module.eval()
@@ -21,9 +22,10 @@ class Model:
         self, state_list: List[torch.Tensor], empirical_p_list: List[torch.Tensor], empirical_v
     ) -> torch.Tensor:
         model_input = torch.stack(state_list)
-        model_output = torch.hstack(
-            (torch.stack(empirical_p_list), torch.tensor(empirical_v).repeat(len(empirical_p_list)).unsqueeze(1))
-        )
+        model_output = torch.hstack((
+            torch.stack(empirical_p_list),
+            torch.tensor(empirical_v, device=self.device).repeat(len(empirical_p_list)).unsqueeze(1)
+        ))
 
         self.module.train()
 

@@ -10,10 +10,11 @@ from model.model import Model
 
 class GameTrainer:
     # pylint: disable=too-few-public-methods
-    def __init__(self, game: Game, model: Model, config: Config) -> None:
+    def __init__(self, game: Game, model: Model, config: Config, device: str) -> None:
         self.model: Model = model
         self.config: Config = config
         self.game: Game = game
+        self.device = device
 
     def _one_iteration(self) -> torch.Tensor:
         empirical_p_list: List[torch.Tensor] = []
@@ -21,14 +22,15 @@ class GameTrainer:
         self.game.start()
 
         while not self.game.over:
-            mcts: MCTSController = MCTSController(self.game, self.model)
+            mcts: MCTSController = MCTSController(self.game, self.model, self.device)
             mcts.simulate(self.config.train_playout_times)
-            empirical_p_list.append(mcts.empirical_p)
+            empirical_p_list.append(mcts.empirical_probability)
             state_list.append(self.game.game_state)
 
-            sampled_move: int = int(mcts.empirical_p.multinomial(1).item())
+            sampled_move: int = int(mcts.empirical_probability.multinomial(1).item())
             self.game.make_move(sampled_move)
 
+        print(empirical_p_list)
         return self.model.train_game(state_list, empirical_p_list, self.game.score)
 
     def train(self) -> None:
