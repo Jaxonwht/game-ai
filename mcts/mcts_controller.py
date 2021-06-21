@@ -47,14 +47,15 @@ class MCTSController:
         desire_positive_score: bool = self.game.desire_positive_score
 
         max_u, best_move = -float("inf"), -1
-        for move in self.game.available_moves:
-            if move in node.children:
-                child_node = node.children[move]
-            else:
+
+        if not node.children:
+            for move in self.game.available_moves:
                 self.game.make_move(move)
                 child_node = StateNode(self.game.game_state, self.model.predict(self.game.game_state))
                 node.children[move] = child_node
                 self.game.undo_move(move)
+
+        for move, child_node in node.children.items():
             child_node_val = child_node.value if desire_positive_score else -child_node.value
             child_visit_counts_total = sum(i.visit_count for i in node.children.values())
             child_u = (

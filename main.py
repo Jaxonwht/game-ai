@@ -32,8 +32,6 @@ if __name__ == "__main__":
         landlord = Landlord(MOVES_BIN, VALID_MOVES_BIN, torch_device=device)
         if args.recompute_moves:
             landlord.recompute_moves()
-        if args.recompute_valid_moves:
-            landlord.recompute_valid_moves()
 
         row_size, col_size = landlord.state_dimension
         print("Initialize pytorch nn model")
@@ -56,3 +54,6 @@ if __name__ == "__main__":
 
         print("Start training")
         landlord_trainer.train()
+
+        print("Saving valid moves data for landlord")
+        landlord.save_valid_moves()

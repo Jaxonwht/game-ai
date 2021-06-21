@@ -4,7 +4,7 @@ import pickle
 from enum import Enum
 from collections import Counter
 from typing import Iterable, Dict, Tuple, List
-from multiprocessing import Manager, Process, Pool
+from multiprocessing import Manager, Process
 
 import torch
 from torch import Tensor
@@ -55,20 +55,20 @@ class Landlord(Game):
         self.moves_bin = moves_bin
         self.valid_moves_bin = valid_moves_bin
         self.torch_device = torch_device
-        self.valid_moves = []
+        self.valid_moves: List[List[int]] = []
         try:
             with open(moves_bin, "rb") as moves_bin_file:
                 self.internal_moves = pickle.load(moves_bin_file)
                 self.internal_moves_back_ref = {move: index for index, move in enumerate(self.internal_moves)}
+            try:
+                with open(valid_moves_bin, "rb") as valid_moves_bin_file:
+                    self.valid_moves = pickle.load(valid_moves_bin_file)
+            except Exception:  # pylint: disable=broad-except
+                print("Does not load valid moves data from persistent storage")
+                self.valid_moves = [[] for _ in range(len(self.internal_moves))]
         except Exception:  # pylint: disable=broad-except
             print("Does not load moves data from persistent storage")
             self.recompute_moves()
-        try:
-            with open(valid_moves_bin, "rb") as valid_moves_bin_file:
-                self.valid_moves = pickle.load(valid_moves_bin_file)
-        except Exception:  # pylint: disable=broad-except
-            print("Does not load valid moves data from persistent storage")
-            self.recompute_valid_moves()
 
     @staticmethod
     def _init_hands() -> Tuple[List[int], List[int], List[int]]:
@@ -200,20 +200,7 @@ class Landlord(Game):
         with open(self.moves_bin, "wb") as file:
             pickle.dump(self.internal_moves, file)
 
-    def recompute_valid_moves(self) -> None:
-        print("Recompute valid moves data for the Landlord game")
-        total_move_count = len(self.internal_moves)
-        self.valid_moves = [[] for _ in range(total_move_count)]
-        with Pool() as pool:
-            for index, move_list in pool.imap_unordered(
-                    self._compute_valid_move,
-                    # randomize input because differnet moves take very different time
-                    random.sample(range(total_move_count), total_move_count),
-                    chunksize=10
-            ):
-                self.valid_moves[index] = move_list
-
-        print("Storing Landlord valid moves data")
+        self.valid_moves = [[] for _ in range(len(self.internal_moves))]
         with open(self.valid_moves_bin, "wb") as file:
             pickle.dump(self.valid_moves, file)
 
@@ -231,10 +218,10 @@ class Landlord(Game):
     def hand_contains_move(hand: List[int], move: MoveInternal) -> bool:
         return all(hand[i] >= v for i, v in move.dict_form.items())
 
-    def _compute_valid_move(self, move_index: int) -> Tuple[int, List[int]]:
+    def _compute_valid_move(self, move_index: int) -> List[int]:
         # pylint: disable=too-many-branches, too-many-locals, too-many-statements
         if not move_index:
-            return move_index, list(range(len(self.internal_moves)))
+            return list(range(len(self.internal_moves)))
 
         last_move: MoveInternal = self.internal_moves[move_index]
         last_move_type: MoveType = last_move.move_type
@@ -242,11 +229,11 @@ class Landlord(Game):
         moves = set()
 
         # skip turn
-        moves.add(0)
+        moves.add(self.internal_moves_back_ref[Skip()])
 
         # only skip for double joker
         if last_move_type == MoveType.DOUBLE_JOKER:
-            return move_index, list(moves)
+            return list(moves)
 
         # double joker always a valid move
         moves.add(self.internal_moves_back_ref[DoubleJoker()])
@@ -256,7 +243,7 @@ class Landlord(Game):
             # four cards
             for i in range(last_card + 1, 13):
                 moves.add(self.internal_moves_back_ref[Four(i, {i: 4})])
-            return move_index, list(moves)
+            return list(moves)
 
         # four cards always a valid move
         for i in range(13):
@@ -369,7 +356,7 @@ class Landlord(Game):
                     double_pairs.update(double_pairs)
                     double_pairs.update({i: 4})
                     moves.add(self.internal_moves_back_ref[FourPlusTwoPairs(i, double_pairs)])
-        return move_index, list(moves)
+        return list(moves)
 
     @property
     def available_moves(self) -> List[int]:
@@ -382,7 +369,11 @@ class Landlord(Game):
             return moves
 
         last_move_index = self.moves[-1][0]
-        valid_moves = self.valid_moves[last_move_index]
+        if not self.valid_moves[last_move_index]:
+            valid_moves = self._compute_valid_move(last_move_index)
+            self.valid_moves[last_move_index] = valid_moves
+        else:
+            valid_moves = self.valid_moves[last_move_index]
 
         for valid_move_index in valid_moves:
             if Landlord.hand_contains_move(hand, self.internal_moves[valid_move_index]):
@@ -446,3 +437,7 @@ class Landlord(Game):
     def desire_positive_score(self) -> bool:
         # landlord wants positive score while peasant wants negative score
         return self.current_role == PlayerRole.LANDLORD
+
+    def save_valid_moves(self) -> None:
+        with open(self.valid_moves_bin, "wb") as file:
+            pickle.dump(self.valid_moves, file)
