@@ -1,5 +1,4 @@
-import itertools
-from typing import List, Tuple, Iterable
+from typing import List, Tuple
 
 import torch
 import torch.nn as nn
@@ -8,7 +7,7 @@ import torch.nn as nn
 class Model:
     def __init__(self, module: nn.Module, learning_rate: float, device: str) -> None:
         self.device = device
-        self.module: nn.Module = module.to(device).share_memory()
+        self.module: nn.Module = module.to(device)
         self.optimizer = torch.optim.Adam(self.module.parameters(), lr=learning_rate)
         self.module.eval()
         self.mse_loss = torch.nn.MSELoss(reduction="mean")
@@ -21,17 +20,14 @@ class Model:
 
     def train_game(
         self,
-        state_list: Iterable[List[torch.Tensor]],
-        empirical_p_list: Iterable[List[torch.Tensor]],
-        empirical_v: Iterable[int]
+        state_list: List[torch.Tensor],
+        empirical_p_list: List[torch.Tensor],
+        empirical_v: int
     ) -> torch.Tensor:
-        model_input = torch.stack(tuple(itertools.chain.from_iterable(state_list)))
-        plist_v_iterable = zip(empirical_p_list, empirical_v)
-        model_output = torch.vstack(tuple(
-            torch.hstack((
-                torch.stack(p_list),
-                torch.tensor(v, device=self.device).repeat(len(p_list))
-             )) for p_list, v in plist_v_iterable
+        model_input = torch.stack(state_list)
+        model_output = torch.hstack((
+            torch.stack(empirical_p_list),
+            torch.tensor(empirical_v, device=self.device).repeat(len(empirical_p_list)).unsqueeze(0)
         ))
 
         self.module.train()

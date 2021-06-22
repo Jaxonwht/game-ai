@@ -2,7 +2,6 @@ import argparse
 
 import torch
 import torch.nn as nn
-import torch.multiprocessing as mp
 import torch.cuda
 
 from config.config import Config
@@ -28,8 +27,6 @@ if __name__ == "__main__":
         VALID_MOVES_BIN = "data/landlord/valid_moves.bin"
 
         device: str = "cuda" if torch.cuda.is_available() else "cpu"
-
-        mp.set_start_method("spawn", force=True)
 
         print("Initialize game")
         landlord = Landlord(MOVES_BIN, VALID_MOVES_BIN, torch_device=device)
