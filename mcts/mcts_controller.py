@@ -31,15 +31,18 @@ class MCTSController:
             probability[move] = child_node.visit_count
         return probability / torch.sum(probability)
 
-    def simulate(self, count: int) -> None:
-        for _ in range(count):
-            self._search(self.root)
+    def confirm_move(self, move: int) -> None:
+        self.root = self.root.children[move]
 
-    def _search(self, node: StateNode) -> float:
+    def simulate(self, count: int, search_depth_cap: int) -> None:
+        for _ in range(count):
+            self._search(self.root, search_depth_cap)
+
+    def _search(self, node: StateNode, search_depth_cap: int) -> float:
         if self.game.over:
             return self.game.score
 
-        if node.visit_count == 0:
+        if node.visit_count == 0 or search_depth_cap == 0:
             node.value_sum += node.value
             node.visit_count += 1
             return node.value
@@ -66,7 +69,7 @@ class MCTSController:
                 max_u, best_move = child_u, move
 
         self.game.make_move(best_move)
-        next_val = self._search(node.children[best_move])
+        next_val = self._search(node.children[best_move], search_depth_cap - 1)
         self.game.undo_move(best_move)
 
         node.value_sum += next_val
