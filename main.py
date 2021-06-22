@@ -2,7 +2,6 @@ import argparse
 
 import torch
 import torch.nn as nn
-import torch.multiprocessing as mp
 import torch.cuda
 
 from config.config import Config
@@ -27,14 +26,10 @@ if __name__ == "__main__":
         MOVES_BIN = "data/landlord/moves.bin"
         VALID_MOVES_BIN = "data/landlord/valid_moves.bin"
 
-        device: str = "cuda" if torch.cuda.is_available() else "cpu"
-
-        mp.set_start_method("spawn", force=True)
+        device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
         print("Initialize game")
-        landlord = Landlord(MOVES_BIN, VALID_MOVES_BIN, torch_device=device)
-        if args.recompute_moves:
-            landlord.recompute_moves()
+        landlord = Landlord(MOVES_BIN, VALID_MOVES_BIN, args.recompute_moves)
 
         row_size, col_size = landlord.state_dimension
         print("Initialize pytorch nn model")
@@ -51,8 +46,7 @@ if __name__ == "__main__":
         landlord_trainer: GameTrainer = GameTrainer(
             landlord,
             landlord_model,
-            config,
-            device
+            config
         )
 
         print("Start training")

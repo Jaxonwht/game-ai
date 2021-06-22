@@ -1,7 +1,7 @@
 from typing import List, Tuple
 
+import numpy as np
 import torch
-import torch.multiprocessing as mp
 
 from config.config import Config
 from game_definition.game import Game
@@ -11,49 +11,34 @@ from model.model import Model
 
 class GameTrainer:
     # pylint: disable=too-few-public-methods
-    def __init__(self, game: Game, model: Model, config: Config, device: str) -> None:
+    def __init__(self, game: Game, model: Model, config: Config) -> None:
         self.model: Model = model
         self.config: Config = config
         self.game: Game = game
-        self.device = device
+        self.rng = np.random.default_rng()
 
-    @staticmethod
-    def _one_iteration(args) -> Tuple[List[torch.Tensor], List[torch.Tensor], int]:
-        game, model, device, train_playout_times, search_depth_cap = args
-        empirical_p_list: List[torch.Tensor] = []
-        state_list: List[torch.Tensor] = []
+    def _one_iteration(self) -> Tuple[List[np.ndarray], List[np.ndarray], int]:
+        empirical_p_list: List[np.ndarray] = []
+        state_list: List[np.ndarray] = []
+
+        self.game.start()
 
         with torch.no_grad():
-            mcts = MCTSController(game, model, device)
-            while not game.over:
-                mcts.simulate(train_playout_times, search_depth_cap)
+            mcts = MCTSController(self.game, self.model)
+            while not self.game.over:
+                mcts.simulate(self.config.train_playout_times, self.config.search_depth_cap)
                 empirical_p_list.append(mcts.empirical_probability)
-                state_list.append(game.game_state)
+                state_list.append(self.game.game_state)
 
-                sampled_move: int = int(mcts.empirical_probability.multinomial(1).item())
-                game.make_move(sampled_move)
+                sampled_move = self.rng.choice(mcts.empirical_probability.size, p=mcts.empirical_probability)
+                self.game.make_move(sampled_move)
                 mcts.confirm_move(sampled_move)
 
-        return state_list, empirical_p_list, game.score
+        return state_list, empirical_p_list, self.game.score
 
     def train(self) -> None:
         game_count = 0
         for _ in range(self.config.train_iterations):
-            self.game.start()
-            with mp.Pool() as pool:
-                iterator = pool.imap_unordered(
-                    GameTrainer._one_iteration,
-                    (
-                        (
-                            self.game,
-                            self.model,
-                            self.device,
-                            self.config.train_playout_times,
-                            self.config.search_depth_cap
-                        ) for _ in range(self.config.mcts_batch_size)
-                    ),
-                    chunksize=self.config.mcts_batch_chunk_size
-                )
-                loss = self.model.train_game(*zip(*iterator))  # type: ignore
-                game_count += self.config.mcts_batch_size
-                print(f"Game count {game_count}, loss {loss.item()}")
+            loss = self.model.train_game(*self._one_iteration())
+            game_count += 1
+            print(f"Game count {game_count}, loss {loss.item()}")

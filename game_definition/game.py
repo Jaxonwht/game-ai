@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import List, Tuple
 
-from torch import Tensor
+import numpy as np
 
 class Game(ABC):
     @abstractmethod
@@ -28,7 +28,7 @@ class Game(ABC):
 
     @property
     @abstractmethod
-    def game_state(self) -> Tensor:
+    def game_state(self) -> np.ndarray:
         pass
 
     @property

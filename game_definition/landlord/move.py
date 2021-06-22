@@ -1,7 +1,9 @@
 # type: ignore
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Dict, Tuple
+from typing import Tuple, List
+
+import numpy as np
 
 
 class MoveType(Enum):
@@ -23,32 +25,26 @@ class MoveType(Enum):
 
 
 class MoveInternal(ABC):
-    def __init__(self, dict_form: Dict[int, int]) -> None:
-        self._dict_form: Dict[int, int] = dict_form
+    def __init__(self, cards: np.ndarray) -> None:
+        self._cards = cards
+        self._cards.flags.writeable = False
 
     def __eq__(self, other) -> bool:
         return (
             isinstance(other, MoveInternal) and
             self.move_type == other.move_type and
-            self.dict_form == other.dict_form
+            np.all(self.cards == other.cards)
         )
 
     def __hash__(self) -> int:
-        return hash((
-            self.move_type,
-            *(self.dict_form.get(i, 0) for i in range(15))
-        ))
+        return hash((self.move_type, self._cards.tobytes()))
 
     def __repr__(self) -> str:
-        return f"MoveInternal(type: {self.move_type.name}, dict: {self.dict_form})"
+        return f"MoveInternal(type: {self.move_type.name}, cards: {self.cards})"
 
     @property
-    def tuple_form(self) -> Tuple[int, ...]:
-        return tuple(self.dict_form.get(i, 0) for i in range(15))
-
-    @property
-    def dict_form(self) -> Dict[int, int]:
-        return self._dict_form
+    def cards(self) -> np.ndarray:
+        return self._cards
 
     @property
     def move_type(self) -> MoveType:
@@ -67,7 +63,7 @@ class MoveInternal(ABC):
 
 class Skip(MoveInternal):
     def __init__(self) -> None:
-        super().__init__({})
+        super().__init__(np.zeros(15, dtype=int))
 
     @property
     def range(self) -> Tuple[int, int]:
@@ -79,9 +75,11 @@ class Skip(MoveInternal):
 
 
 class Single(MoveInternal):
-    def __init__(self, card: int, dict_form: Dict[int, int]) -> None:
+    def __init__(self, card: int) -> None:
         self.card: int = card
-        super().__init__(dict_form)
+        array = np.zeros(15, dtype=int)
+        array[card] = 1
+        super().__init__(array)
 
     @property
     def dominant_card(self) -> int:
@@ -93,9 +91,11 @@ class Single(MoveInternal):
 
 
 class Double(MoveInternal):
-    def __init__(self, card: int, dict_form: Dict[int, int]) -> None:
+    def __init__(self, card: int) -> None:
         self.card: int = card
-        super().__init__(dict_form)
+        array = np.zeros(15, dtype=int)
+        array[card] = 2
+        super().__init__(array)
 
     @property
     def dominant_card(self) -> int:
@@ -107,9 +107,11 @@ class Double(MoveInternal):
 
 
 class Triple(MoveInternal):
-    def __init__(self, card: int, dict_form: Dict[int, int]) -> None:
+    def __init__(self, card: int) -> None:
         self.card: int = card
-        super().__init__(dict_form)
+        array = np.zeros(15, dtype=int)
+        array[card] = 3
+        super().__init__(array)
 
     @property
     def dominant_card(self) -> int:
@@ -121,9 +123,11 @@ class Triple(MoveInternal):
 
 
 class Four(MoveInternal):
-    def __init__(self, card: int, dict_form: Dict[int, int]) -> None:
+    def __init__(self, card: int) -> None:
         self.card: int = card
-        super().__init__(dict_form)
+        array = np.zeros(15, dtype=int)
+        array[card] = 4
+        super().__init__(array)
 
     @property
     def dominant_card(self) -> int:
@@ -135,9 +139,11 @@ class Four(MoveInternal):
 
 
 class ThreePlusOne(MoveInternal):
-    def __init__(self, three: int, dict_form: Dict[int, int]) -> None:
+    def __init__(self, three: int, one: int) -> None:
         self.three: int = three
-        super().__init__(dict_form)
+        array = np.zeros(15, dtype=int)
+        np.add.at(array, [three, one], [3, 1])
+        super().__init__(array)
 
     @property
     def dominant_card(self) -> int:
@@ -149,9 +155,12 @@ class ThreePlusOne(MoveInternal):
 
 
 class ThreePlusTwo(MoveInternal):
-    def __init__(self, three: int, dict_form: Dict[int, int]) -> None:
+    def __init__(self, three: int, two: int) -> None:
         self.three: int = three
-        super().__init__(dict_form)
+        array = np.zeros(15, dtype=int)
+        array[three] = 3
+        array[two] = 2
+        super().__init__(array)
 
     @property
     def dominant_card(self) -> int:
@@ -163,10 +172,12 @@ class ThreePlusTwo(MoveInternal):
 
 
 class Straight(MoveInternal):
-    def __init__(self, start: int, end: int, dict_form: Dict[int, int]) -> None:
+    def __init__(self, start: int, end: int) -> None:
         self.start: int = start
         self.end: int = end
-        super().__init__(dict_form)
+        array = np.zeros(15, dtype=int)
+        array[start: end + 1] = 1
+        super().__init__(array)
 
     @property
     def range(self) -> Tuple[int, int]:
@@ -178,10 +189,12 @@ class Straight(MoveInternal):
 
 
 class DoubleStraight(MoveInternal):
-    def __init__(self, start: int, end: int, dict_form: Dict[int, int]) -> None:
+    def __init__(self, start: int, end: int) -> None:
         self.start: int = start
         self.end: int = end
-        super().__init__(dict_form)
+        array = np.zeros(15, dtype=int)
+        array[start: end + 1] = 2
+        super().__init__(array)
 
     @property
     def range(self) -> Tuple[int, int]:
@@ -193,10 +206,12 @@ class DoubleStraight(MoveInternal):
 
 
 class TripleStraight(MoveInternal):
-    def __init__(self, start: int, end: int, dict_form: Dict[int, int]) -> None:
+    def __init__(self, start: int, end: int) -> None:
         self.start: int = start
         self.end: int = end
-        super().__init__(dict_form)
+        array = np.zeros(15, dtype=int)
+        array[start: end + 1] = 3
+        super().__init__(array)
 
     @property
     def range(self) -> Tuple[int, int]:
@@ -208,10 +223,10 @@ class TripleStraight(MoveInternal):
 
 
 class TripleStraightPlusOnes(MoveInternal):
-    def __init__(self, start: int, end: int, dict_form: Dict[int, int]) -> None:
+    def __init__(self, start: int, end: int, array: np.ndarray) -> None:
         self.start: int = start
         self.end: int = end
-        super().__init__(dict_form)
+        super().__init__(array)
 
     @property
     def range(self) -> Tuple[int, int]:
@@ -223,10 +238,10 @@ class TripleStraightPlusOnes(MoveInternal):
 
 
 class TripleStraightPlusTwos(MoveInternal):
-    def __init__(self, start: int, end: int, dict_form: Dict[int, int]) -> None:
+    def __init__(self, start: int, end: int, array: np.ndarray) -> None:
         self.start: int = start
         self.end: int = end
-        super().__init__(dict_form)
+        super().__init__(array)
 
     @property
     def range(self) -> Tuple[int, int]:
@@ -238,9 +253,12 @@ class TripleStraightPlusTwos(MoveInternal):
 
 
 class FourPlusTwo(MoveInternal):
-    def __init__(self, four: int, dict_form: Dict[int, int]) -> None:
+    def __init__(self, four: int, ones: List[int]) -> None:
         self.four: int = four
-        super().__init__(dict_form)
+        array = np.zeros(15, dtype=int)
+        array[four] = 4
+        np.add.at(array, ones, 1)
+        super().__init__(array)
 
     @property
     def dominant_card(self) -> int:
@@ -252,9 +270,12 @@ class FourPlusTwo(MoveInternal):
 
 
 class FourPlusTwoPairs(MoveInternal):
-    def __init__(self, four: int, dict_form: Dict[int, int]) -> None:
+    def __init__(self, four: int, twos: List[int]) -> None:
         self.four: int = four
-        super().__init__(dict_form)
+        array = np.zeros(15, dtype=int)
+        array[four] = 4
+        np.add.at(array, twos, 2)
+        super().__init__(array)
 
     @property
     def dominant_card(self) -> int:
@@ -267,7 +288,7 @@ class FourPlusTwoPairs(MoveInternal):
 
 class DoubleJoker(MoveInternal):
     def __init__(self) -> None:
-        super().__init__({13: 1, 14: 1})
+        super().__init__(np.append(np.zeros(13, dtype=int), np.ones(2, dtype=int)))
 
     @property
     def dominant_card(self) -> int:

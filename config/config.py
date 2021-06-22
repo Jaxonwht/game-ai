@@ -22,11 +22,3 @@ class Config:
     @property
     def search_depth_cap(self) -> int:
         return self.data.get("search_depth_cap", 50)
-
-    @property
-    def mcts_batch_size(self) -> int:
-        return self.data.get("mcts_batch_size", 200)
-
-    @property
-    def mcts_batch_chunk_size(self) -> int:
-        return self.data.get("mcts_batch_chunk_size", 10)

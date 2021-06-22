@@ -1,16 +1,15 @@
-import itertools
-from typing import List, Tuple, Iterable
+from typing import List
 
+import numpy as np
 import torch
 import torch.nn as nn
 
 
 class Model:
-    def __init__(self, module: nn.Module, learning_rate: float, device: str) -> None:
+    def __init__(self, module: nn.Module, learning_rate: float, device: torch.device) -> None:
         self.device = device
-        self.module: nn.Module = module.to(device).share_memory()
+        self.module: nn.Module = module.to(device)
         self.optimizer = torch.optim.Adam(self.module.parameters(), lr=learning_rate)
-        self.module.eval()
         self.mse_loss = torch.nn.MSELoss(reduction="mean")
 
     def _loss_fn(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
@@ -21,20 +20,15 @@ class Model:
 
     def train_game(
         self,
-        state_list: Iterable[List[torch.Tensor]],
-        empirical_p_list: Iterable[List[torch.Tensor]],
-        empirical_v: Iterable[int]
+        state_list: List[np.ndarray],
+        empirical_p_list: List[np.ndarray],
+        empirical_v: int
     ) -> torch.Tensor:
-        model_input = torch.stack(tuple(itertools.chain.from_iterable(state_list)))
-        plist_v_iterable = zip(empirical_p_list, empirical_v)
-        model_output = torch.vstack(tuple(
-            torch.hstack((
-                torch.stack(p_list),
-                torch.tensor(v, device=self.device).repeat(len(p_list))
-             )) for p_list, v in plist_v_iterable
-        ))
+        model_input = torch.from_numpy(np.stack(state_list)).float().to(self.device)
 
-        self.module.train()
+        model_output = torch.from_numpy(
+            np.hstack((np.stack(empirical_p_list), np.repeat(np.array([empirical_v]), len(empirical_p_list))))
+        ).float().to(self.device)
 
         pred = self.module(model_input)
         loss = self._loss_fn(pred, model_output)
@@ -43,11 +37,10 @@ class Model:
         loss.backward()
         self.optimizer.step()
 
-        self.module.eval()
-
         return loss
 
-    def predict(self, state: torch.Tensor) -> Tuple[torch.Tensor, float]:
+    def predict(self, state: np.ndarray) -> np.ndarray:
         with torch.no_grad():
-            p_v_tuple = self.module(state.unsqueeze(0).unsqueeze(0)).squeeze(0)
-        return p_v_tuple[:-1], p_v_tuple[-1].item()
+            return self.module(
+                torch.from_numpy(np.expand_dims(state, (0, 1))).float().to(self.device)
+            ).squeeze(0).detach().cpu().numpy()
