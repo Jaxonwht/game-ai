@@ -1,6 +1,5 @@
 from typing import List
 
-import numpy as np
 import torch
 import torch.nn as nn
 
@@ -8,7 +7,8 @@ import torch.nn as nn
 class Model:
     def __init__(self, module: nn.Module, learning_rate: float, device: torch.device) -> None:
         self.device = device
-        self.module: nn.Module = module.to(device)
+        self.module: nn.Module = module.to(self.device)
+        self.module.eval()
         self.optimizer = torch.optim.Adam(self.module.parameters(), lr=learning_rate)
         self.mse_loss = torch.nn.MSELoss(reduction="mean")
 
@@ -20,15 +20,18 @@ class Model:
 
     def train_game(
         self,
-        state_list: List[np.ndarray],
-        empirical_p_list: List[np.ndarray],
+        state_list: List[torch.Tensor],
+        empirical_p_list: List[torch.Tensor],
         empirical_v: int
     ) -> torch.Tensor:
-        model_input = torch.from_numpy(np.stack(state_list)).float().to(self.device)
+        model_input = torch.stack(state_list).unsqueeze(1).float().to(self.device)
 
-        model_output = torch.from_numpy(
-            np.hstack((np.stack(empirical_p_list), np.repeat(np.array([empirical_v]), len(empirical_p_list))))
-        ).float().to(self.device)
+        model_output = torch.hstack((
+            torch.stack(empirical_p_list),
+            torch.tensor(empirical_v).repeat(len(empirical_p_list)).unsqueeze(1)
+        )).float().to(self.device)
+
+        self.module.train()
 
         pred = self.module(model_input)
         loss = self._loss_fn(pred, model_output)
@@ -37,10 +40,10 @@ class Model:
         loss.backward()
         self.optimizer.step()
 
+        self.module.eval()
+
         return loss
 
-    def predict(self, state: np.ndarray) -> np.ndarray:
+    def predict(self, state: torch.Tensor) -> torch.Tensor:
         with torch.no_grad():
-            return self.module(
-                torch.from_numpy(np.expand_dims(state, (0, 1))).float().to(self.device)
-            ).squeeze(0).detach().cpu().numpy()
+            return self.module(state.unsqueeze(0).unsqueeze(0).float().to(self.device)).squeeze(0).detach().cpu()

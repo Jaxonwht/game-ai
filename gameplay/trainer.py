@@ -1,6 +1,5 @@
 from typing import List, Tuple
 
-import numpy as np
 import torch
 
 from config.config import Config
@@ -15,24 +14,24 @@ class GameTrainer:
         self.model: Model = model
         self.config: Config = config
         self.game: Game = game
-        self.rng = np.random.default_rng()
 
-    def _one_iteration(self) -> Tuple[List[np.ndarray], List[np.ndarray], int]:
-        empirical_p_list: List[np.ndarray] = []
-        state_list: List[np.ndarray] = []
+    def _one_iteration(self) -> Tuple[List[torch.Tensor], List[torch.Tensor], int]:
+        empirical_p_list: List[torch.Tensor] = []
+        state_list: List[torch.Tensor] = []
 
         self.game.start()
 
         with torch.no_grad():
             mcts = MCTSController(self.game, self.model)
             while not self.game.over:
-                mcts.simulate(self.config.train_playout_times, self.config.search_depth_cap)
+                mcts.simulate(self.config.train_playout_times)
                 empirical_p_list.append(mcts.empirical_probability)
                 state_list.append(self.game.game_state)
 
-                sampled_move = self.rng.choice(mcts.empirical_probability.size, p=mcts.empirical_probability)
+                sampled_move = int(mcts.empirical_probability.multinomial(1).item())
                 self.game.make_move(sampled_move)
                 mcts.confirm_move(sampled_move)
+                print(self.game.game_state)
 
         return state_list, empirical_p_list, self.game.score
 

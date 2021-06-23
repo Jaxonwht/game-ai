@@ -18,7 +18,3 @@ class Config:
     @property
     def learning_rate(self) -> float:
         return self.data.get("learning_rate", 1.0e-3)
-
-    @property
-    def search_depth_cap(self) -> int:
-        return self.data.get("search_depth_cap", 50)
