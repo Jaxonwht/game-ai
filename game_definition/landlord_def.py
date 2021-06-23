@@ -2,10 +2,11 @@ import random
 import itertools
 import pickle
 from enum import Enum
-from typing import Iterable, Dict, Tuple, List
+from typing import Iterable, Dict, Tuple, List, Type, Union
+from multiprocessing import Manager, Process
 
+import numpy as np
 import torch
-from torch.multiprocessing import Manager, Process
 
 from game_definition.game import Game
 from game_definition.landlord.move import (
@@ -88,80 +89,82 @@ class Landlord(Game):
         return hand
 
     @staticmethod
-    def _add_simple_combinations(moves: List[MoveInternal]) -> None:
+    def _add_simple_combinations(moves: List[Tuple[Union[Type[MoveInternal], int], ...]]) -> None:
+        # skip turn
+        moves.append((Skip,))
         # single card
         for i in range(15):
-            moves.append(Single(i))
+            moves.append((Single, i))
         # double cards
         for i in range(13):
-            moves.append(Double(i))
+            moves.append((Double, i))
         # triple cards
         for i in range(13):
-            moves.append(Triple(i))
+            moves.append((Triple, i))
         # four cards
         for i in range(13):
-            moves.append(Four(i))
-            moves.append(ThreePlusOne(i, i))
+            moves.append((Four, i))
+            moves.append((ThreePlusOne, i, i))
         for i, j in itertools.permutations(range(13), 2):
             # 3 + 1
-            moves.append((ThreePlusOne(i, j)))
+            moves.append((ThreePlusOne, i, j))
             # 3 + 2
-            moves.append(ThreePlusTwo(i, j))
+            moves.append((ThreePlusTwo, i, j))
         for i in range(13):
             # 3 + gray joker
-            moves.append(ThreePlusOne(i, 13))
+            moves.append((ThreePlusOne, i, 13))
             # 3 + color joker
-            moves.append(ThreePlusOne(i, 14))
+            moves.append((ThreePlusOne, i, 14))
         # double joker
-        moves.append(DoubleJoker())
+        moves.append((DoubleJoker,))
 
     @staticmethod
-    def _add_four_card_combinations(moves: List[MoveInternal]) -> None:
+    def _add_four_card_combinations(moves: List[Tuple[Union[Type[MoveInternal], int, Tuple[int, int]], ...]]) -> None:
         # 4 + 2
         for i in range(13):
             # 4 + 1 + 1
             for j, k in itertools.combinations(itertools.chain(range(i), range(i + 1, 15)), 2):  # type: ignore
-                moves.append(FourPlusTwo(i, (j, k)))
+                moves.append((FourPlusTwo, i, (j, k)))
             # 4 + 2
             for j in itertools.chain(range(i), range(i + 1, 13)):
-                moves.append(FourPlusTwo(i, (j, j)))
+                moves.append((FourPlusTwo, i, (j, j)))
         # 4 + 2 + 2
         for i in range(13):
             for j, k in itertools.combinations_with_replacement(  # type: ignore
                 itertools.chain(range(i), range(i + 1, 13)),
                 2
             ):
-                moves.append(FourPlusTwoPairs(i, (j, k)))
+                moves.append((FourPlusTwoPairs, i, (j, k)))
 
     @staticmethod
-    def _add_straight_combinations(moves: List[MoveInternal]) -> None:
+    def _add_straight_combinations(moves: List[Tuple[Union[Type[MoveInternal], int], ...]]) -> None:
         # straight
         for i in range(9):
             for j in range(5, 13 - i):
-                moves.append(Straight(i, i + j - 1))
+                moves.append((Straight, i, i + j - 1))
         # double straight
         for i in range(10):
             for j in range(3, min(13 - i, 11)):
-                moves.append(DoubleStraight(i, i + j - 1))
+                moves.append((DoubleStraight, i, i + j - 1))
         # triple straight
         for i in range(11):
             for j in range(2, min(13 - i, 7)):
-                moves.append(TripleStraight(i, i + j - 1))
+                moves.append((TripleStraight, i, i + j - 1))
 
     @staticmethod
-    def _add_airplane_combinations(moves: List[MoveInternal]) -> None:
+    def _add_airplane_combinations(moves: List[Tuple[Union[Type[MoveInternal], int, np.ndarray], ...]]) -> None:
         # straight 3 + 1s
         for i in range(11):
             for j in range(2, min(13 - i, 6)):
                 for k in itertools.combinations_with_replacement(range(15), j):
-                    array = torch.index_put(
-                        torch.zeros(15, dtype=torch.int),
-                        (torch.tensor(tuple(range(i, i + j)) + k),),
-                        torch.tensor((3, 1), dtype=torch.int).repeat_interleave(j),
-                        accumulate=True
+                    array = np.zeros(15, dtype=int)
+                    np.add.at(
+                        array,
+                        np.concatenate((np.arange(i, i + j), np.array(k))),
+                        np.repeat(np.array([3, 1], dtype=int), j)
                     )
-                    if torch.max(array) <= 4 and array[13] <= 1 and array[14] <= 1:
-                        moves.append(TripleStraightPlusOnes(i, i + j - 1, array))
+                    if np.max(array) <= 4 and array[13] <= 1 and array[14] <= 1:
+                        moves.append((TripleStraightPlusOnes, i, i + j - 1, array))
         # straight 3 + 2s
         for i in range(11):
             for j in range(2, min(13 - i, 5)):
@@ -169,21 +172,29 @@ class Landlord(Game):
                     itertools.chain(range(i), range(i + j, 13)),
                     j
                 ):
-                    array = torch.index_put(
-                        torch.zeros(15, dtype=torch.int),
-                        (torch.tensor(tuple(range(i, i + j)) + k),),
-                        torch.tensor((3, 2), dtype=torch.int).repeat_interleave(j),
-                        accumulate=True
+                    array = np.zeros(15, dtype=int)
+                    np.add.at(
+                        array,
+                        np.concatenate((np.arange(i, i + j), np.array(k))),
+                        np.repeat(np.array([3, 2], dtype=int), j)
                     )
-                    if torch.max(array) <= 4:
-                        moves.append(TripleStraightPlusTwos(i, i + j - 1, array))
+                    if np.max(array) <= 4:
+                        moves.append((TripleStraightPlusTwos, i, i + j - 1, array))
+
+    @staticmethod
+    def _transform_args_to_move(
+        move: Tuple[Union[Type[MoveInternal], int, np.ndarray, Tuple[int, int]], ...]
+    ) -> MoveInternal:
+        move_class = move[0]
+        if move_class in (TripleStraightPlusOnes, TripleStraightPlusTwos):
+            return move_class(*move[1: -1], torch.from_numpy(move[-1]))  # type: ignore
+        return move_class(*move[1:])  # type: ignore
 
     def recompute_moves(self) -> None:
         # pylint: disable=too-many-branches
         print("Recompute moves data for the Landlord game")
         with Manager() as manager:
             moves = manager.list()  # type: ignore
-            moves.append(Skip())
             processes = (
                 Process(target=Landlord._add_simple_combinations, args=(moves,)),
                 Process(target=Landlord._add_four_card_combinations, args=(moves,)),
@@ -196,7 +207,7 @@ class Landlord(Game):
                 process.join()
 
             # remove possible duplicates
-            self.internal_moves = list(set(moves))
+            self.internal_moves = list(set(map(Landlord._transform_args_to_move, moves)))
             self.internal_moves_back_ref = {move: index for index, move in enumerate(self.internal_moves)}
 
         print("Storing Landlord moves data")
