@@ -1,6 +1,7 @@
 from typing import List, Tuple
 
 import torch
+import torch.multiprocessing as mp
 
 from config.config import Config
 from game_definition.game import Game
@@ -15,7 +16,7 @@ class GameTrainer:
         self.config: Config = config
         self.game: Game = game
 
-    def _one_iteration(self) -> Tuple[List[torch.Tensor], List[torch.Tensor], int]:
+    def _one_iteration(self, _x: int) -> Tuple[List[torch.Tensor], List[torch.Tensor], int]:
         empirical_p_list: List[torch.Tensor] = []
         state_list: List[torch.Tensor] = []
 
@@ -36,7 +37,13 @@ class GameTrainer:
 
     def train(self) -> None:
         for _ in range(self.config.train_iterations):
-            loss = self.model.train_game(*self._one_iteration())
+            with mp.Pool() as pool:
+                iterator = pool.imap_unordered(
+                    self._one_iteration,
+                    range(self.config.mcts_batch_size),
+                    chunksize=self.config.mcts_batch_chunksize
+                )
+                loss = self.model.train_game(*zip(*iterator))  # type: ignore
             self.model.game_count += 1
             self.model.epoch_count += 1
             self.model.save_model(loss)

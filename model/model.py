@@ -1,5 +1,6 @@
+import itertools
 from copy import deepcopy
-from typing import List
+from typing import List, Iterable
 
 import torch
 import torch.nn as nn
@@ -9,8 +10,8 @@ class Model:
     # pylint: disable=too-many-instance-attributes
     def __init__(self, module: nn.Module, learning_rate: float, device: torch.device, checkpoint_path: str) -> None:
         self.device = device
-        self.inference_module = deepcopy(module)
-        self.module: nn.Module = module.to(self.device)
+        self.inference_module = deepcopy(module).share_memory()
+        self.module: nn.Module = module.to(self.device).share_memory()
         self.module.train()
         self.inference_module.eval()
         self.optimizer = torch.optim.Adam(self.module.parameters(), lr=learning_rate)
@@ -27,15 +28,20 @@ class Model:
 
     def train_game(
         self,
-        state_list: List[torch.Tensor],
-        empirical_p_list: List[torch.Tensor],
-        empirical_v: int
+        state_list_iterable: Iterable[List[torch.Tensor]],
+        empirical_p_list_iterable: Iterable[List[torch.Tensor]],
+        empirical_v_iterable: Iterable[int]
     ) -> torch.Tensor:
-        model_input = torch.stack(state_list).unsqueeze(1).float().to(self.device)
+        model_input = torch.stack(
+            tuple(itertools.chain.from_iterable(state_list_iterable))
+        ).unsqueeze(1).float().to(self.device)
 
-        model_output = torch.hstack((
-            torch.stack(empirical_p_list),
-            torch.tensor(empirical_v).repeat(len(empirical_p_list)).unsqueeze(1)
+        p_v_iterable = zip(empirical_p_list_iterable, empirical_v_iterable)
+        model_output = torch.vstack(tuple(
+            torch.hstack((
+                torch.stack(empirical_p_list),
+                torch.tensor(empirical_v).repeat(len(empirical_p_list)).unsqueeze(1)
+            )) for empirical_p_list, empirical_v in p_v_iterable
         )).float().to(self.device)
 
         pred = self.module(model_input)

@@ -4,6 +4,8 @@ import torch
 import torch.nn as nn
 import torch.cuda
 
+import torch.multiprocessing as mp
+
 from config.config import Config
 from game_definition.landlord_def import Landlord
 from gameplay.trainer import GameTrainer
@@ -31,6 +33,8 @@ if __name__ == "__main__":
         MOVES_BIN = "data/landlord/moves.bin"
         VALID_MOVES_BIN = "data/landlord/valid_moves.bin"
         CHECKPOINT_PT = "data/landlord/model.pt"
+        mp.set_start_method("spawn", force=True)
+        mp.set_sharing_strategy("file_system")
 
         device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
