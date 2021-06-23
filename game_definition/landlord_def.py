@@ -61,6 +61,8 @@ class Landlord(Game):
         try:
             with open(moves_bin, "rb") as moves_bin_file:
                 self.internal_moves = pickle.load(moves_bin_file)
+                for move_internal in self.internal_moves:
+                    move_internal.cards.share_memory_()
                 self.internal_moves_back_ref = {move: index for index, move in enumerate(self.internal_moves)}
             try:
                 with open(valid_moves_bin, "rb") as valid_moves_bin_file:
@@ -208,6 +210,8 @@ class Landlord(Game):
 
             # remove possible duplicates
             self.internal_moves = list(set(map(Landlord._transform_args_to_move, moves)))
+            for move_internal in self.internal_moves:
+                move_internal.cards.share_memory_()
             self.internal_moves_back_ref = {move: index for index, move in enumerate(self.internal_moves)}
 
         print("Storing Landlord moves data")

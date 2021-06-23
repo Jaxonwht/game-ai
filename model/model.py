@@ -97,4 +97,4 @@ class Model:
         self.game_count = checkpoint.get("game", 0)
         self.module.load_state_dict(checkpoint["state_dict"])
         self.optimizer.load_state_dict(checkpoint["optim_state_dict"])
-        self.inference_module.load_state_dict(self.module.state_dict())  # type: ignore
+        self.inference_module.load_state_dict(self.module.state_dict()).share_memory()  # type: ignore
