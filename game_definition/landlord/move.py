@@ -27,6 +27,7 @@ class MoveType(Enum):
 class MoveInternal(ABC):
     def __init__(self, cards: torch.Tensor) -> None:
         self._cards = cards
+        self._cards.share_memory_()
 
     def __eq__(self, other) -> bool:
         return (

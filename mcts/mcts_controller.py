@@ -3,7 +3,7 @@ from typing import Dict
 import torch
 
 from game_definition.game import Game
-from model.model import Model
+from model.model import InterferenceModel
 
 
 class StateNode:
@@ -18,10 +18,10 @@ class StateNode:
 
 
 class MCTSController:
-    def __init__(self, game: Game, model: Model) -> None:
+    def __init__(self, game: Game, inference_model: InterferenceModel) -> None:
         self.game: Game = game
-        self.root = StateNode(game.game_state, model.predict(game.game_state))
-        self.model = model
+        self.root = StateNode(game.game_state, inference_model.predict(game.game_state))
+        self.inference_model = inference_model
 
     @property
     def empirical_probability(self) -> torch.Tensor:
@@ -54,7 +54,7 @@ class MCTSController:
         if not node.children:
             for move in self.game.available_moves:
                 self.game.make_move(move)
-                child_node = StateNode(self.game.game_state, self.model.predict(self.game.game_state))
+                child_node = StateNode(self.game.game_state, self.inference_model.predict(self.game.game_state))
                 node.children[move] = child_node
                 self.game.undo_move(move)
 

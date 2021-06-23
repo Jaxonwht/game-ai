@@ -6,12 +6,22 @@ import torch
 import torch.nn as nn
 
 
+class InterferenceModel:
+    # pylint: disable=too-few-public-methods
+    def __init__(self, module: nn.Module):
+        self.module = module
+
+    def predict(self, state: torch.Tensor) -> torch.Tensor:
+        with torch.no_grad():
+            return self.module(state.unsqueeze(0).unsqueeze(0).float()).squeeze(0)
+
+
 class Model:
     # pylint: disable=too-many-instance-attributes
     def __init__(self, module: nn.Module, learning_rate: float, device: torch.device, checkpoint_path: str) -> None:
         self.device = device
         self.inference_module = deepcopy(module).share_memory()
-        self.module: nn.Module = module.to(self.device).share_memory()
+        self.module: nn.Module = module.to(self.device)
         self.module.train()
         self.inference_module.eval()
         self.optimizer = torch.optim.Adam(self.module.parameters(), lr=learning_rate)
@@ -55,9 +65,9 @@ class Model:
 
         return loss.detach().cpu()
 
-    def predict(self, state: torch.Tensor) -> torch.Tensor:
-        with torch.no_grad():
-            return self.inference_module(state.unsqueeze(0).unsqueeze(0).float()).squeeze(0)
+    @property
+    def inference_model(self) -> InterferenceModel:
+        return InterferenceModel(self.inference_module)
 
     def save_model(self, loss: torch.Tensor) -> None:
         torch.save(

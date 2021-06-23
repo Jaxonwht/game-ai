@@ -16,31 +16,40 @@ class GameTrainer:
         self.config: Config = config
         self.game: Game = game
 
-    def _one_iteration(self, _x: int) -> Tuple[List[torch.Tensor], List[torch.Tensor], int]:
+    @staticmethod
+    def _one_iteration(args) -> Tuple[List[torch.Tensor], List[torch.Tensor], int]:
+        game, inference_model, config = args
         empirical_p_list: List[torch.Tensor] = []
         state_list: List[torch.Tensor] = []
 
-        self.game.start()
+        game.start()
 
         with torch.no_grad():
-            mcts = MCTSController(self.game, self.model)
-            while not self.game.over:
-                mcts.simulate(self.config.train_playout_times)
+            mcts = MCTSController(game, inference_model)
+            while not game.over:
+                mcts.simulate(config.train_playout_times)
                 empirical_p_list.append(mcts.empirical_probability)
-                state_list.append(self.game.game_state)
+                state_list.append(game.game_state)
 
                 sampled_move = int(mcts.empirical_probability.multinomial(1).item())
-                self.game.make_move(sampled_move)
+                game.make_move(sampled_move)
                 mcts.confirm_move(sampled_move)
+                print(game.game_state)
 
-        return state_list, empirical_p_list, self.game.score
+        return state_list, empirical_p_list, game.score
 
     def train(self) -> None:
         for _ in range(self.config.train_iterations):
             with mp.Pool() as pool:
                 iterator = pool.imap_unordered(
-                    self._one_iteration,
-                    range(self.config.mcts_batch_size),
+                    GameTrainer._one_iteration,
+                    (
+                        (
+                            self.game,
+                            self.model.inference_model,
+                            self.config
+                        ) for _ in range(self.config.mcts_batch_size)
+                    ),
                     chunksize=self.config.mcts_batch_chunksize
                 )
                 loss = self.model.train_game(*zip(*iterator))  # type: ignore
