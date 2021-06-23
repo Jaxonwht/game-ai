@@ -2,6 +2,7 @@ from typing import List
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 class Model:
@@ -15,7 +16,7 @@ class Model:
     def _loss_fn(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
         return (
             self.mse_loss(pred[:, -1], target[:, -1])
-            - torch.sum(target[:, :-1] * torch.log(pred[:, -1])) / target.size()[0]
+            - torch.matmul(F.softmax(target[:, :-1], dim=0), torch.log(pred[:, -1])).mean()
         )
 
     def train_game(
