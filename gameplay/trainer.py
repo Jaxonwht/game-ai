@@ -34,7 +34,6 @@ class GameTrainer:
                 sampled_move = int(mcts.empirical_probability.multinomial(1).item())
                 game.make_move(sampled_move)
                 mcts.confirm_move(sampled_move)
-                print(game.game_state)
 
         return state_list, empirical_p_list, game.score
 
