@@ -1,3 +1,4 @@
+from copy import deepcopy
 from typing import List
 
 import torch
@@ -5,12 +6,18 @@ import torch.nn as nn
 
 
 class Model:
-    def __init__(self, module: nn.Module, learning_rate: float, device: torch.device) -> None:
+    # pylint: disable=too-many-instance-attributes
+    def __init__(self, module: nn.Module, learning_rate: float, device: torch.device, checkpoint_path: str) -> None:
         self.device = device
+        self.inference_module = deepcopy(module)
         self.module: nn.Module = module.to(self.device)
-        self.module.eval()
+        self.module.train()
+        self.inference_module.eval()
         self.optimizer = torch.optim.Adam(self.module.parameters(), lr=learning_rate)
         self.mse_loss = torch.nn.MSELoss(reduction="mean")
+        self.checkpoint_path = checkpoint_path
+        self.game_count = 0
+        self.epoch_count = 0
 
     def _loss_fn(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
         return (
@@ -31,8 +38,6 @@ class Model:
             torch.tensor(empirical_v).repeat(len(empirical_p_list)).unsqueeze(1)
         )).float().to(self.device)
 
-        self.module.train()
-
         pred = self.module(model_input)
         loss = self._loss_fn(pred, model_output)
 
@@ -40,10 +45,40 @@ class Model:
         loss.backward()
         self.optimizer.step()
 
-        self.module.eval()
+        self.inference_module.load_state_dict(self.module.state_dict())  # type: ignore
 
-        return loss
+        return loss.detach().cpu()
 
     def predict(self, state: torch.Tensor) -> torch.Tensor:
         with torch.no_grad():
-            return self.module(state.unsqueeze(0).unsqueeze(0).float().to(self.device)).squeeze(0).detach().cpu()
+            return self.inference_module(state.unsqueeze(0).unsqueeze(0).float()).squeeze(0)
+
+    def save_model(self, loss: torch.Tensor) -> None:
+        torch.save(
+            {
+                "epoch": self.epoch_count,
+                "game": self.game_count,
+                "loss": loss,
+                "state_dict": self.module.state_dict(),
+                "optim_state_dict": self.optimizer.state_dict()
+            },
+            self.checkpoint_path
+        )
+
+    def load_model(self) -> None:
+        try:
+            checkpoint = torch.load(self.checkpoint_path, map_location=self.device)
+        except Exception:  # pylint: disable=broad-except
+            print(f"Failed to load {self.checkpoint_path}, start new training cycle")
+            return
+        if "state_dict" not in checkpoint:
+            print(f"state_dict missing in {self.checkpoint_path}")
+            return
+        if "optim_state_dict" not in checkpoint:
+            print(f"optim_state_dict missing in {self.checkpoint_path}")
+            return
+        self.epoch_count = checkpoint.get("epoch", 0)
+        self.game_count = checkpoint.get("game", 0)
+        self.module.load_state_dict(checkpoint["state_dict"])
+        self.optimizer.load_state_dict(checkpoint["optim_state_dict"])
+        self.inference_module.load_state_dict(self.module.state_dict())  # type: ignore

@@ -19,12 +19,18 @@ if __name__ == "__main__":
         action="store_true",
         help="Recompute all the valid moves of Landlord game"
     )
+    parser.add_argument(
+        "--retrain",
+        action="store_true",
+        help="Retrain and overwrite checkpoint pt file"
+    )
     args = parser.parse_args()
     config: Config = Config()
 
     if args.name == "landlord":
         MOVES_BIN = "data/landlord/moves.bin"
         VALID_MOVES_BIN = "data/landlord/valid_moves.bin"
+        CHECKPOINT_PT = "data/landlord/model.pt"
 
         device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
@@ -40,7 +46,9 @@ if __name__ == "__main__":
             landlord.number_possible_moves + 1
         )
 
-        landlord_model: Model = Model(landlord_module, config.learning_rate, device)
+        landlord_model: Model = Model(landlord_module, config.learning_rate, device, CHECKPOINT_PT)
+        if not args.retrain:
+            landlord_model.load_model()
 
         print("Initialize game trainer")
         landlord_trainer: GameTrainer = GameTrainer(

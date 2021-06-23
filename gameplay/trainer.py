@@ -35,8 +35,9 @@ class GameTrainer:
         return state_list, empirical_p_list, self.game.score
 
     def train(self) -> None:
-        game_count = 0
         for _ in range(self.config.train_iterations):
             loss = self.model.train_game(*self._one_iteration())
-            game_count += 1
-            print(f"Game count {game_count}, loss {loss.item()}")
+            self.model.game_count += 1
+            self.model.epoch_count += 1
+            self.model.save_model(loss)
+            print(f"epoch {self.model.epoch_count}, game {self.model.game_count}, loss {loss.item()}")
