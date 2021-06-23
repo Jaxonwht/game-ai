@@ -172,7 +172,7 @@ class Landlord(Game):
                     array = torch.index_put(
                         torch.zeros(15, dtype=torch.int),
                         (torch.tensor(tuple(range(i, i + j)) + k),),
-                        torch.tensor((3, 2), dtype=torch.int).repeat(j),
+                        torch.tensor((3, 2), dtype=torch.int).repeat_interleave(j),
                         accumulate=True
                     )
                     if torch.max(array) <= 4:
