@@ -2,6 +2,7 @@ from typing import Tuple
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 class LandLordNN(nn.Module):
@@ -51,7 +52,8 @@ class LandLordNN(nn.Module):
         )
 
     def forward(self, input_tensor: torch.Tensor) -> torch.Tensor:
-        return self.model(input_tensor)
+        raw_tensor = self.model(input_tensor)
+        return torch.hstack((F.softmax(raw_tensor[:, :-1], dim=0), raw_tensor[:, -1].unsqueeze(1)))
 
     @staticmethod
     def output_dimension(input_dim: int, kernel_size: int) -> int:

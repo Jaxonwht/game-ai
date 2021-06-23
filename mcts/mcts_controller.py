@@ -1,7 +1,6 @@
 from typing import Dict
 
 import torch
-import torch.nn.functional as F
 
 from game_definition.game import Game
 from model.model import Model
@@ -10,7 +9,7 @@ from model.model import Model
 class StateNode:
     # pylint: disable=too-few-public-methods
     def __init__(self, state: torch.Tensor, p_v_tuple: torch.Tensor) -> None:
-        self.probability = F.softmax(p_v_tuple[:-1], dim=0)
+        self.probability = p_v_tuple[:-1]
         self.value = p_v_tuple[-1]
         self.state = state
         self.visit_count = torch.tensor(0, dtype=torch.int)
