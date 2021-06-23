@@ -48,8 +48,8 @@ class Landlord(Game):
         self.internal_moves: List[MoveInternal] = []
         self.internal_moves_back_ref: Dict[MoveInternal, int] = {}
         self.moves: List[Tuple[int, PlayerRole]] = []
-        self.played = torch.zeros((3, 15), dtype=torch.int)
-        self.hands = torch.zeros((3, 15), dtype=torch.int)
+        self.played = torch.zeros((3, 15), dtype=torch.int64)
+        self.hands = torch.zeros((3, 15), dtype=torch.int64)
         self.current_role: PlayerRole = PlayerRole.LANDLORD
         self.moves_bin = moves_bin
         self.valid_moves_bin = valid_moves_bin
@@ -79,7 +79,7 @@ class Landlord(Game):
             Landlord._convert_cards(deck[:20]),
             Landlord._convert_cards(deck[20: 37]),
             Landlord._convert_cards(deck[37:])
-        ), dtype=torch.int)
+        ), dtype=torch.int64)
 
     @staticmethod
     def _convert_cards(cards: Iterable[int]) -> List[int]:
@@ -218,7 +218,7 @@ class Landlord(Game):
 
     def start(self) -> None:
         self.moves = []
-        self.played = torch.zeros((3, 15), dtype=torch.int)
+        self.played = torch.zeros((3, 15), dtype=torch.int64)
         self.hands = Landlord._init_hands()
         self.current_role = PlayerRole.LANDLORD
 
@@ -301,9 +301,9 @@ class Landlord(Game):
             for i in range(end - start + 1, 12 - end):
                 for j in itertools.combinations_with_replacement(range(15), end - start + 1):  # type: ignore
                     array = torch.index_put(
-                        torch.zeros(15, dtype=torch.int),
+                        torch.zeros(15, dtype=torch.int64),
                         (torch.tensor(tuple(range(start + i, end + i + 1)) + j),),  # type: ignore
-                        torch.tensor((3, 1), dtype=torch.int).repeat_interleave(end - start + 1),
+                        torch.tensor((3, 1), dtype=torch.int64).repeat_interleave(end - start + 1),
                         accumulate=True
                     )
                     if torch.max(array) <= 4 and array[13] <= 1 and array[14] <= 1:
@@ -320,9 +320,9 @@ class Landlord(Game):
                     end - start + 1
                 ):
                     array = torch.index_put(
-                        torch.zeros(15, dtype=torch.int),
+                        torch.zeros(15, dtype=torch.int64),
                         (torch.tensor(tuple(range(start + i, end + i + 1)) + j),),  # type: ignore
-                        torch.tensor((3, 2), dtype=torch.int).repeat_interleave(end - start + 1),
+                        torch.tensor((3, 2), dtype=torch.int64).repeat_interleave(end - start + 1),
                         accumulate=True
                     )
                     if torch.max(array) <= 4:
@@ -411,15 +411,15 @@ class Landlord(Game):
             self.hands[self.current_role.value]
         ))
         if not self.moves or self.moves[-1][1] == self.current_role:
-            cards_on_field = torch.zeros(15, dtype=torch.int)
+            cards_on_field = torch.zeros(15, dtype=torch.int64)
         else:
             cards_on_field = self.internal_moves[self.moves[-1][0]].cards
         state = torch.vstack((state, cards_on_field.unsqueeze(0)))
 
         role_col = torch.index_put(
-            torch.zeros(5, dtype=torch.int),
+            torch.zeros(5, dtype=torch.int64),
             (torch.tensor(self.current_role.value),),
-            torch.tensor(1, dtype=torch.int)
+            torch.tensor(1, dtype=torch.int64)
         ).unsqueeze(1)
 
         return torch.hstack((state, role_col))
