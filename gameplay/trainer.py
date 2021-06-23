@@ -52,7 +52,7 @@ class GameTrainer:
                     chunksize=self.config.mcts_batch_chunksize
                 )
                 loss = self.model.train_game(*zip(*iterator))  # type: ignore
-            self.model.game_count += 1
+            self.model.game_count += self.config.mcts_batch_size
             self.model.epoch_count += 1
             self.model.save_model(loss)
             print(f"epoch {self.model.epoch_count}, game {self.model.game_count}, loss {loss.item()}")
