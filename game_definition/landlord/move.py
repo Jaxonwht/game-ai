@@ -62,7 +62,7 @@ class MoveInternal(ABC):
 
 class Skip(MoveInternal):
     def __init__(self) -> None:
-        super().__init__(torch.zeros(15, dtype=torch.int))
+        super().__init__(torch.zeros(15, dtype=torch.int64))
 
     @property
     def range(self) -> Tuple[int, int]:
@@ -80,10 +80,10 @@ class Single(MoveInternal):
             torch.index_put(
                 torch.zeros(
                     15,
-                    dtype=torch.int
+                    dtype=torch.int64
                 ),
                 (torch.tensor(card),),
-                torch.tensor(1, dtype=torch.int)
+                torch.tensor(1, dtype=torch.int64)
             )
         )
 
@@ -103,10 +103,10 @@ class Double(MoveInternal):
             torch.index_put(
                 torch.zeros(
                     15,
-                    dtype=torch.int
+                    dtype=torch.int64
                 ),
                 (torch.tensor(card),),
-                torch.tensor(2, dtype=torch.int)
+                torch.tensor(2, dtype=torch.int64)
             )
         )
 
@@ -126,10 +126,10 @@ class Triple(MoveInternal):
             torch.index_put(
                 torch.zeros(
                     15,
-                    dtype=torch.int
+                    dtype=torch.int64
                 ),
                 (torch.tensor(card),),
-                torch.tensor(3, dtype=torch.int)
+                torch.tensor(3, dtype=torch.int64)
             )
         )
 
@@ -149,10 +149,10 @@ class Four(MoveInternal):
             torch.index_put(
                 torch.zeros(
                     15,
-                    dtype=torch.int
+                    dtype=torch.int64
                 ),
                 (torch.tensor(card),),
-                torch.tensor(4, dtype=torch.int)
+                torch.tensor(4, dtype=torch.int64)
             )
         )
 
@@ -172,10 +172,10 @@ class ThreePlusOne(MoveInternal):
             torch.index_put(
                 torch.zeros(
                     15,
-                    dtype=torch.int
+                    dtype=torch.int64
                 ),
                 (torch.tensor((three, one)),),
-                torch.tensor((3, 1), dtype=torch.int),
+                torch.tensor((3, 1), dtype=torch.int64),
                 accumulate=True
             )
         )
@@ -196,10 +196,10 @@ class ThreePlusTwo(MoveInternal):
             torch.index_put(
                 torch.zeros(
                     15,
-                    dtype=torch.int
+                    dtype=torch.int64
                 ),
                 (torch.tensor((three, two)),),
-                torch.tensor((3, 2), dtype=torch.int),
+                torch.tensor((3, 2), dtype=torch.int64),
                 accumulate=True
             )
         )
@@ -221,10 +221,10 @@ class Straight(MoveInternal):
             torch.index_put(
                 torch.zeros(
                     15,
-                    dtype=torch.int
+                    dtype=torch.int64
                 ),
                 (torch.arange(start, end + 1),),
-                torch.tensor(1, dtype=torch.int)
+                torch.tensor(1, dtype=torch.int64)
             )
         )
 
@@ -245,10 +245,10 @@ class DoubleStraight(MoveInternal):
             torch.index_put(
                 torch.zeros(
                     15,
-                    dtype=torch.int
+                    dtype=torch.int64
                 ),
                 (torch.arange(start, end + 1),),
-                torch.tensor(2, dtype=torch.int)
+                torch.tensor(2, dtype=torch.int64)
             )
         )
 
@@ -269,10 +269,10 @@ class TripleStraight(MoveInternal):
             torch.index_put(
                 torch.zeros(
                     15,
-                    dtype=torch.int
+                    dtype=torch.int64
                 ),
                 (torch.arange(start, end + 1),),
-                torch.tensor(3, dtype=torch.int)
+                torch.tensor(3, dtype=torch.int64)
             )
         )
 
@@ -322,10 +322,10 @@ class FourPlusTwo(MoveInternal):
             torch.index_put(
                 torch.zeros(
                     15,
-                    dtype=torch.int
+                    dtype=torch.int64
                 ),
                 (torch.tensor((four,) + ones),),
-                torch.tensor((4, 1, 1), dtype=torch.int),
+                torch.tensor((4, 1, 1), dtype=torch.int64),
                 accumulate=True
             )
         )
@@ -346,10 +346,10 @@ class FourPlusTwoPairs(MoveInternal):
             torch.index_put(
                 torch.zeros(
                     15,
-                    dtype=torch.int
+                    dtype=torch.int64
                 ),
                 (torch.tensor((four,) + twos),),
-                torch.tensor((4, 2, 2), dtype=torch.int),
+                torch.tensor((4, 2, 2), dtype=torch.int64),
                 accumulate=True
             )
         )
@@ -369,10 +369,10 @@ class DoubleJoker(MoveInternal):
             torch.index_put(
                 torch.zeros(
                     15,
-                    dtype=torch.int
+                    dtype=torch.int64
                 ),
                 (torch.tensor((13, 14)),),
-                torch.tensor((1, 1), dtype=torch.int)
+                torch.tensor((1, 1), dtype=torch.int64)
             )
         )
 

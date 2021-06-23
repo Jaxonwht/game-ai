@@ -12,7 +12,7 @@ class StateNode:
         self.probability = p_v_tuple[:-1]
         self.value = p_v_tuple[-1]
         self.state = state
-        self.visit_count = torch.tensor(0, dtype=torch.int)
+        self.visit_count = torch.tensor(0)
         self.value_sum = torch.tensor(0, dtype=torch.float)
         self.children: Dict[int, StateNode] = {}
 
