@@ -20,7 +20,7 @@ class Model:
     # pylint: disable=too-many-instance-attributes
     def __init__(self, module: nn.Module, learning_rate: float, device: torch.device, checkpoint_path: str) -> None:
         self.device = device
-        self.inference_module = deepcopy(module).share_memory()
+        self.inference_module = deepcopy(module)
         self.module: nn.Module = module.to(self.device)
         self.module.train()
         self.inference_module.eval()
@@ -97,4 +97,4 @@ class Model:
         self.game_count = checkpoint.get("game", 0)
         self.module.load_state_dict(checkpoint["state_dict"])
         self.optimizer.load_state_dict(checkpoint["optim_state_dict"])
-        self.inference_module.load_state_dict(self.module.state_dict()).share_memory()  # type: ignore
+        self.inference_module.load_state_dict(self.module.state_dict()) # type: ignore
