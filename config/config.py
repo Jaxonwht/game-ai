@@ -26,3 +26,7 @@ class Config:
     @property
     def mcts_batch_chunksize(self) -> int:
         return self.data.get("mcts_batch_chunksize", 1)
+
+    @property
+    def mcts_num_processes(self) -> int:
+        return self.data.get("mcts_num_processes", 2)

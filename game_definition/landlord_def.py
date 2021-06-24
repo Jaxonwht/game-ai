@@ -210,13 +210,13 @@ class Landlord(Game):
 
             # remove possible duplicates
             self.internal_moves = list(set(map(Landlord._transform_args_to_move, moves)))
-            for move_internal in self.internal_moves:
-                move_internal.cards.share_memory_()
             self.internal_moves_back_ref = {move: index for index, move in enumerate(self.internal_moves)}
 
         print("Storing Landlord moves data")
         with open(self.moves_bin, "wb") as file:
             pickle.dump(self.internal_moves, file)
+        for move_internal in self.internal_moves:
+            move_internal.cards.share_memory_()
 
         self.valid_moves = [[] for _ in range(len(self.internal_moves))]
 

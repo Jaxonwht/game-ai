@@ -39,7 +39,7 @@ class GameTrainer:
 
     def train(self) -> None:
         for _ in range(self.config.train_iterations):
-            with mp.Pool() as pool:
+            with mp.Pool(processes=self.config.mcts_num_processes) as pool:
                 iterator = pool.imap_unordered(
                     GameTrainer._one_iteration,
                     (

@@ -3,3 +3,4 @@ train_iterations: 1000
 learning_rate: 1.0e-3
 mcts_batch_size: 10
 mcts_batch_chunksize: 1
+mcts_num_processes: 4
