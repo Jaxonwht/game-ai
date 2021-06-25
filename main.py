@@ -1,7 +1,6 @@
 import argparse
 
 import torch
-import torch.nn as nn
 import torch.cuda
 
 from config.config import Config
@@ -39,14 +38,18 @@ if __name__ == "__main__":
 
         row_size, col_size = landlord.state_dimension
         print("Initialize pytorch nn model")
-        landlord_module: nn.Module = LandLordNN(
-            10,
-            row_size,
-            col_size,
-            landlord.number_possible_moves + 1
+        landlord_model: Model = Model(
+            (
+                LandLordNN,
+                10,
+                row_size,
+                col_size,
+                landlord.number_possible_moves + 1
+            ),
+            config.learning_rate,
+            device,
+            CHECKPOINT_PT
         )
-
-        landlord_model: Model = Model(landlord_module, config.learning_rate, device, CHECKPOINT_PT)
         if not args.retrain:
             landlord_model.load_model()
 

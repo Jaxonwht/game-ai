@@ -1,23 +1,27 @@
-from copy import deepcopy
-from typing import List
+from typing import List, Tuple, Type
 
 import torch
-import torch.nn as nn
 
 
 class Model:
     # pylint: disable=too-many-instance-attributes
-    def __init__(self, module: nn.Module, learning_rate: float, device: torch.device, checkpoint_path: str) -> None:
+    def __init__(
+        self,
+        module_initializer: Tuple[Type, int, int, int, int],
+        learning_rate: float,
+        device: torch.device,
+        checkpoint_path: str
+    ) -> None:
         self.device = device
-        self.inference_module = deepcopy(module)
-        self.module: nn.Module = module.to(self.device)
+        self.module_initializer = module_initializer
+        self.module = module_initializer[0](*module_initializer[1:]).to(self.device)
         self.module.train()
-        self.inference_module.eval()
         self.optimizer = torch.optim.Adam(self.module.parameters(), lr=learning_rate)
         self.mse_loss = torch.nn.MSELoss(reduction="mean")
         self.checkpoint_path = checkpoint_path
         self.game_count = 0
         self.epoch_count = 0
+        self.save_model(torch.tensor(0))
 
     def _loss_fn(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
         return (
@@ -45,13 +49,7 @@ class Model:
         loss.backward()
         self.optimizer.step()
 
-        self.inference_module.load_state_dict(self.module.state_dict())  # type: ignore
-
         return loss.detach().cpu()
-
-    def predict(self, state: torch.Tensor) -> torch.Tensor:
-        with torch.no_grad():
-            return self.inference_module(state.unsqueeze(0).unsqueeze(0).float()).squeeze(0)
 
     def save_model(self, loss: torch.Tensor) -> None:
         torch.save(
@@ -81,4 +79,3 @@ class Model:
         self.game_count = checkpoint.get("game", 0)
         self.module.load_state_dict(checkpoint["state_dict"])
         self.optimizer.load_state_dict(checkpoint["optim_state_dict"])
-        self.inference_module.load_state_dict(self.module.state_dict())  # type: ignore
