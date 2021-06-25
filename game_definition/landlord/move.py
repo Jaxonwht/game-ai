@@ -32,7 +32,7 @@ class MoveInternal(ABC):
         return (
             isinstance(other, MoveInternal) and
             self.move_type == other.move_type and
-            torch.all(self.cards == other.cards).item()
+            torch.all(self.cards == other.cards)
         )
 
     def __hash__(self) -> int:
@@ -76,16 +76,9 @@ class Skip(MoveInternal):
 class Single(MoveInternal):
     def __init__(self, card: int) -> None:
         self.card: int = card
-        super().__init__(
-            torch.index_put(
-                torch.zeros(
-                    15,
-                    dtype=torch.int64
-                ),
-                (torch.tensor(card),),
-                torch.tensor(1, dtype=torch.int64)
-            )
-        )
+        array = torch.zeros(15, dtype=torch.int64)
+        array[card] = 1
+        super().__init__(array)
 
     @property
     def dominant_card(self) -> int:
@@ -99,16 +92,9 @@ class Single(MoveInternal):
 class Double(MoveInternal):
     def __init__(self, card: int) -> None:
         self.card: int = card
-        super().__init__(
-            torch.index_put(
-                torch.zeros(
-                    15,
-                    dtype=torch.int64
-                ),
-                (torch.tensor(card),),
-                torch.tensor(2, dtype=torch.int64)
-            )
-        )
+        array = torch.zeros(15, dtype=torch.int64)
+        array[card] = 2
+        super().__init__(array)
 
     @property
     def dominant_card(self) -> int:
@@ -122,16 +108,9 @@ class Double(MoveInternal):
 class Triple(MoveInternal):
     def __init__(self, card: int) -> None:
         self.card: int = card
-        super().__init__(
-            torch.index_put(
-                torch.zeros(
-                    15,
-                    dtype=torch.int64
-                ),
-                (torch.tensor(card),),
-                torch.tensor(3, dtype=torch.int64)
-            )
-        )
+        array = torch.zeros(15, dtype=torch.int64)
+        array[card] = 3
+        super().__init__(array)
 
     @property
     def dominant_card(self) -> int:
@@ -145,16 +124,9 @@ class Triple(MoveInternal):
 class Four(MoveInternal):
     def __init__(self, card: int) -> None:
         self.card: int = card
-        super().__init__(
-            torch.index_put(
-                torch.zeros(
-                    15,
-                    dtype=torch.int64
-                ),
-                (torch.tensor(card),),
-                torch.tensor(4, dtype=torch.int64)
-            )
-        )
+        array = torch.zeros(15, dtype=torch.int64)
+        array[card] = 4
+        super().__init__(array)
 
     @property
     def dominant_card(self) -> int:
@@ -192,17 +164,9 @@ class ThreePlusOne(MoveInternal):
 class ThreePlusTwo(MoveInternal):
     def __init__(self, three: int, two: int) -> None:
         self.three: int = three
-        super().__init__(
-            torch.index_put(
-                torch.zeros(
-                    15,
-                    dtype=torch.int64
-                ),
-                (torch.tensor((three, two)),),
-                torch.tensor((3, 2), dtype=torch.int64),
-                accumulate=True
-            )
-        )
+        array = torch.zeros(15, dtype=torch.int64)
+        array[[three, two]] = torch.tensor((3, 2))
+        super().__init__(array)
 
     @property
     def dominant_card(self) -> int:
@@ -217,16 +181,9 @@ class Straight(MoveInternal):
     def __init__(self, start: int, end: int) -> None:
         self.start: int = start
         self.end: int = end
-        super().__init__(
-            torch.index_put(
-                torch.zeros(
-                    15,
-                    dtype=torch.int64
-                ),
-                (torch.arange(start, end + 1),),
-                torch.tensor(1, dtype=torch.int64)
-            )
-        )
+        array = torch.zeros(15, dtype=torch.int64)
+        array[range(start, end + 1)] = 1
+        super().__init__(array)
 
     @property
     def range(self) -> Tuple[int, int]:
@@ -241,16 +198,9 @@ class DoubleStraight(MoveInternal):
     def __init__(self, start: int, end: int) -> None:
         self.start: int = start
         self.end: int = end
-        super().__init__(
-            torch.index_put(
-                torch.zeros(
-                    15,
-                    dtype=torch.int64
-                ),
-                (torch.arange(start, end + 1),),
-                torch.tensor(2, dtype=torch.int64)
-            )
-        )
+        array = torch.zeros(15, dtype=torch.int64)
+        array[range(start, end + 1)] = 2
+        super().__init__(array)
 
     @property
     def range(self) -> Tuple[int, int]:
@@ -265,16 +215,9 @@ class TripleStraight(MoveInternal):
     def __init__(self, start: int, end: int) -> None:
         self.start: int = start
         self.end: int = end
-        super().__init__(
-            torch.index_put(
-                torch.zeros(
-                    15,
-                    dtype=torch.int64
-                ),
-                (torch.arange(start, end + 1),),
-                torch.tensor(3, dtype=torch.int64)
-            )
-        )
+        array = torch.zeros(15, dtype=torch.int64)
+        array[range(start, end + 1)] = 3
+        super().__init__(array)
 
     @property
     def range(self) -> Tuple[int, int]:
@@ -365,16 +308,9 @@ class FourPlusTwoPairs(MoveInternal):
 
 class DoubleJoker(MoveInternal):
     def __init__(self) -> None:
-        super().__init__(
-            torch.index_put(
-                torch.zeros(
-                    15,
-                    dtype=torch.int64
-                ),
-                (torch.tensor((13, 14)),),
-                torch.tensor((1, 1), dtype=torch.int64)
-            )
-        )
+        array = torch.zeros(15, dtype=torch.int64)
+        array[13:] = 1
+        super().__init__(array)
 
     @property
     def dominant_card(self) -> int:
