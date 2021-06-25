@@ -2,7 +2,7 @@ import random
 import itertools
 import pickle
 from enum import Enum
-from typing import Iterable, Dict, Tuple, List, Type, Union
+from typing import Iterable, Dict, Tuple, List
 from multiprocessing import Manager, Process
 
 import numpy as np
@@ -294,7 +294,7 @@ class Landlord(Game):
                     np.add.at(
                         array,
                         list(range(start + i, end + i + 1)) + list(j),  # type: ignore
-                        np.repeat(np.array([3, 1]), j)
+                        np.repeat(np.array([3, 1]), end - start + 1)
                     )
                     if np.max(array) <= 4 and array[13] <= 1 and array[14] <= 1:
                         moves.add(self.internal_moves_back_ref[TripleStraightPlusOnes(
@@ -313,7 +313,7 @@ class Landlord(Game):
                     np.add.at(
                         array,
                         list(range(start + i, end + i + 1)) + list(j),  # type: ignore
-                        np.repeat(np.array([3, 2]), j)
+                        np.repeat(np.array([3, 2]), end - start + 1)
                     )
                     if np.max(array) <= 4:
                         moves.add(self.internal_moves_back_ref[TripleStraightPlusTwos(
@@ -395,28 +395,25 @@ class Landlord(Game):
         return 5, 16
 
     @property
-    def game_state(self) -> torch.Tensor:
-        state = torch.vstack((
+    def game_state(self) -> np.ndarray:
+        state = np.vstack((
             self.played,
             self.hands[self.current_role.value]
         ))
         if not self.moves or self.moves[-1][1] == self.current_role:
-            cards_on_field = torch.zeros(15, dtype=torch.int64)
+            cards_on_field = np.zeros(15, dtype=int)
         else:
             cards_on_field = self.internal_moves[self.moves[-1][0]].cards
-        state = torch.vstack((state, cards_on_field.unsqueeze(0)))
+        state = np.vstack((state, cards_on_field))
 
-        role_col = torch.index_put(
-            torch.zeros(5, dtype=torch.int64),
-            (torch.tensor(self.current_role.value),),
-            torch.tensor(1, dtype=torch.int64)
-        ).unsqueeze(1)
+        role_col = np.zeros(5, dtype=int)
+        role_col[self.current_role.value] = 1
 
-        return torch.hstack((state, role_col))
+        return np.hstack((state, np.expand_dims(role_col, 1)))
 
     @property
     def over(self) -> bool:
-        return torch.any(torch.all(self.hands == 0, dim=1))  # type: ignore
+        return np.any(np.all(self.hands == 0, axis=1))  # type: ignore
 
     @property
     def score(self) -> int:
@@ -431,3 +428,21 @@ class Landlord(Game):
     def save_valid_moves(self) -> None:
         with open(self.valid_moves_bin, "wb") as file:
             pickle.dump(self.valid_moves, file)
+
+    def save_intermediate_data(self) -> None:
+        self.save_valid_moves()
+
+    @property
+    def intermediate_data(self) -> List[List[int]]:
+        return self.valid_moves
+
+    def collect_intermediate_data(self, valid_moves_iterable: Iterable[List[List[int]]]) -> None:
+        # pylint: disable=arguments-differ
+        valid_moves_tuple = tuple(valid_moves_iterable)
+        for i, moves in enumerate(self.valid_moves):
+            if not moves:
+                try:
+                    # pylint: disable=cell-var-from-loop
+                    self.valid_moves[i] = next(filter(lambda x: x, map(lambda x: x[i], valid_moves_tuple)))
+                except StopIteration:
+                    pass

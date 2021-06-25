@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
-from typing import List, Tuple
+from typing import List, Tuple, Any, Iterable
 
-import torch
+import numpy as np
 
 
 class Game(ABC):
@@ -29,7 +29,7 @@ class Game(ABC):
 
     @property
     @abstractmethod
-    def game_state(self) -> torch.Tensor:
+    def game_state(self) -> np.ndarray:
         pass
 
     @property
@@ -50,4 +50,17 @@ class Game(ABC):
     @property
     @abstractmethod
     def desire_positive_score(self) -> bool:
+        pass
+
+    @abstractmethod
+    def save_intermediate_data(self) -> None:
+        pass
+
+    @property
+    @abstractmethod
+    def intermediate_data(self) -> Any:
+        pass
+
+    @abstractmethod
+    def collect_intermediate_data(self, data_iterable: Iterable) -> None:
         pass

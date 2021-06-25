@@ -1,36 +1,34 @@
-from typing import Dict
+from typing import Dict, Union
 
 import torch
+import torch.nn as nn
+import numpy as np
 
 from game_definition.game import Game
-from model.model import Model
 
 
 class StateNode:
     # pylint: disable=too-few-public-methods
-    def __init__(self, state: torch.Tensor, p_v_tuple: torch.Tensor) -> None:
+    def __init__(self, state: np.ndarray, p_v_tuple: np.ndarray) -> None:
         self.probability = p_v_tuple[:-1]
         self.value = p_v_tuple[-1]
         self.state = state
-        self.visit_count = torch.tensor(0)
-        self.value_sum = torch.tensor(0, dtype=torch.float)
+        self.visit_count = 0
+        self.value_sum: float = 0
         self.children: Dict[int, StateNode] = {}
 
 
 class MCTSController:
-    def __init__(self, game: Game, model: Model) -> None:
+    def __init__(self, game: Game, model: nn.Module) -> None:
         self.game: Game = game
-        self.root = StateNode(game.game_state, model.predict(game.game_state))
         self.model = model
+        self.root = StateNode(game.game_state, self._predict(game.game_state))
 
     @property
-    def empirical_probability(self) -> torch.Tensor:
-        probability = torch.index_put(
-            torch.zeros(self.game.number_possible_moves, dtype=torch.int64),
-            (torch.tensor(tuple(self.root.children.keys())),),
-            torch.tensor(tuple(map(lambda node: node.visit_count, self.root.children.values())))
-        )
-        return probability / torch.sum(probability)
+    def empirical_probability(self) -> np.ndarray:
+        probability = np.zeros(self.game.number_possible_moves, dtype=int)
+        probability[list(self.root.children.keys())] = tuple(x.visit_count for x in self.root.children.values())
+        return np.divide(probability, np.sum(probability), dtype=np.float32)
 
     def confirm_move(self, move: int) -> None:
         self.root = self.root.children[move]
@@ -39,24 +37,27 @@ class MCTSController:
         for _ in range(count):
             self._search(self.root)
 
-    def _search(self, node: StateNode) -> torch.Tensor:
+    def _predict(self, state: np.ndarray) -> np.ndarray:
+        return self.model(torch.from_numpy(np.expand_dims(state, (0, 1))).float()).squeeze(0).numpy()
+
+    def _search(self, node: StateNode) -> Union[int, float]:
         if self.game.over:
             node.visit_count += 1
-            return torch.tensor(self.game.score)
+            return self.game.score
 
         if node.visit_count == 0:
             node.value_sum += node.value
             node.visit_count += 1
             return node.value
 
-        desire_positive_score: bool = self.game.desire_positive_score
+        desire_positive_score = self.game.desire_positive_score
 
-        max_u, best_move = torch.tensor(-float("inf")), -1
+        max_u, best_move = -float("inf"), -1
 
         if not node.children:
             for move in self.game.available_moves:
                 self.game.make_move(move)
-                child_node = StateNode(self.game.game_state, self.model.predict(self.game.game_state))
+                child_node = StateNode(self.game.game_state, self._predict(self.game.game_state))
                 node.children[move] = child_node
                 self.game.undo_move(move)
 
@@ -64,7 +65,7 @@ class MCTSController:
             child_node_val = child_node.value_sum if desire_positive_score else -child_node.value_sum
             child_u = (
                 child_node_val
-                + node.probability[move] * torch.sqrt(node.visit_count) / (1 + child_node.visit_count)
+                + node.probability[move] * np.sqrt(node.visit_count) / (1 + child_node.visit_count)
             )
             if child_u > max_u:
                 max_u, best_move = child_u, move

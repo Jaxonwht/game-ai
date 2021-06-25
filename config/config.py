@@ -18,3 +18,11 @@ class Config:
     @property
     def learning_rate(self) -> float:
         return self.data.get("learning_rate", 1.0e-3)
+
+    @property
+    def mcts_batch_size(self) -> int:
+        return self.data.get("mcts_batch_size", 2)
+
+    @property
+    def mcts_batch_chunksize(self) -> int:
+        return self.data.get("mcts_batch_chunksize", 1)
