@@ -25,10 +25,12 @@ class MCTSController:
 
     @property
     def empirical_probability(self) -> torch.Tensor:
-        probability = torch.zeros(self.game.number_possible_moves, dtype=torch.float)
-        for move, child_node in self.root.children.items():
-            probability[move] = child_node.visit_count
-        return probability
+        probability = torch.index_put(
+            torch.zeros(self.game.number_possible_moves, dtype=torch.int64),
+            (torch.tensor(tuple(self.root.children.keys())),),
+            torch.tensor(tuple(map(lambda node: node.visit_count, self.root.children.values())))
+        )
+        return probability / torch.sum(probability)
 
     def confirm_move(self, move: int) -> None:
         self.root = self.root.children[move]
