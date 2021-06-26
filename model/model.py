@@ -1,23 +1,29 @@
-from copy import deepcopy
-from typing import List
+import itertools
+from typing import Tuple, List, Iterable
 
 import torch
-import torch.nn as nn
+import numpy as np
 
 
 class Model:
     # pylint: disable=too-many-instance-attributes
-    def __init__(self, module: nn.Module, learning_rate: float, device: torch.device, checkpoint_path: str) -> None:
+    def __init__(
+        self,
+        module_initializer: Tuple,
+        learning_rate: float,
+        device: torch.device,
+        checkpoint_path: str
+    ) -> None:
         self.device = device
-        self.inference_module = deepcopy(module)
-        self.module: nn.Module = module.to(self.device)
+        self._module_initializer = module_initializer
+        self.module = module_initializer[0](*module_initializer[1:]).to(self.device)
         self.module.train()
-        self.inference_module.eval()
         self.optimizer = torch.optim.Adam(self.module.parameters(), lr=learning_rate)
         self.mse_loss = torch.nn.MSELoss(reduction="mean")
-        self.checkpoint_path = checkpoint_path
+        self._checkpoint_path = checkpoint_path
         self.game_count = 0
         self.epoch_count = 0
+        self.save_model(torch.tensor(0))
 
     def _loss_fn(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
         return (
@@ -25,18 +31,33 @@ class Model:
             - torch.sum(target[:, :-1] * torch.log(pred[:, :-1])) / target.size()[0]
         )
 
+    @property
+    def module_initializer(self) -> Tuple:
+        return self._module_initializer
+
+    @property
+    def checkpoint_path(self) -> str:
+        return self._checkpoint_path
+
     def train_game(
         self,
-        state_list: List[torch.Tensor],
-        empirical_p_list: List[torch.Tensor],
-        empirical_v: int
+        state_list_iterable: Iterable[List[np.ndarray]],
+        empirical_p_list_iterable: Iterable[List[np.ndarray]],
+        empirical_v_iterable: Iterable[int]
     ) -> torch.Tensor:
-        model_input = torch.stack(state_list).unsqueeze(1).float().to(self.device)
+        model_input = torch.from_numpy(
+            np.stack(tuple(itertools.chain.from_iterable(state_list_iterable)))
+        ).unsqueeze(1).float().to(self.device)
 
-        model_output = torch.hstack((
-            torch.stack(empirical_p_list),
-            torch.tensor(empirical_v).repeat(len(empirical_p_list)).unsqueeze(1)
-        )).float().to(self.device)
+        p_v_iterable = zip(empirical_p_list_iterable, empirical_v_iterable)
+        model_output = torch.from_numpy(
+            np.vstack(tuple(
+                np.hstack((
+                    np.stack(p_list),
+                    np.expand_dims(np.tile(v, len(p_list)), 1)
+                )) for p_list, v in p_v_iterable
+            ))
+        ).float().to(self.device)
 
         pred = self.module(model_input)
         loss = self._loss_fn(pred, model_output)
@@ -45,13 +66,7 @@ class Model:
         loss.backward()
         self.optimizer.step()
 
-        self.inference_module.load_state_dict(self.module.state_dict())  # type: ignore
-
         return loss.detach().cpu()
-
-    def predict(self, state: torch.Tensor) -> torch.Tensor:
-        with torch.no_grad():
-            return self.inference_module(state.unsqueeze(0).unsqueeze(0).float()).squeeze(0)
 
     def save_model(self, loss: torch.Tensor) -> None:
         torch.save(
@@ -62,23 +77,22 @@ class Model:
                 "state_dict": self.module.state_dict(),
                 "optim_state_dict": self.optimizer.state_dict()
             },
-            self.checkpoint_path
+            self._checkpoint_path
         )
 
     def load_model(self) -> None:
         try:
-            checkpoint = torch.load(self.checkpoint_path, map_location=self.device)
+            checkpoint = torch.load(self._checkpoint_path, map_location=self.device)
         except Exception:  # pylint: disable=broad-except
-            print(f"Failed to load {self.checkpoint_path}, start new training cycle")
+            print(f"Failed to load {self._checkpoint_path}, start new training cycle")
             return
         if "state_dict" not in checkpoint:
-            print(f"state_dict missing in {self.checkpoint_path}")
+            print(f"state_dict missing in {self._checkpoint_path}")
             return
         if "optim_state_dict" not in checkpoint:
-            print(f"optim_state_dict missing in {self.checkpoint_path}")
+            print(f"optim_state_dict missing in {self._checkpoint_path}")
             return
         self.epoch_count = checkpoint.get("epoch", 0)
         self.game_count = checkpoint.get("game", 0)
         self.module.load_state_dict(checkpoint["state_dict"])
         self.optimizer.load_state_dict(checkpoint["optim_state_dict"])
-        self.inference_module.load_state_dict(self.module.state_dict())  # type: ignore

@@ -1,6 +1,8 @@
-from typing import List, Tuple
+from typing import List, Tuple, Any
 
 import torch
+import torch.multiprocessing as mp
+import numpy as np
 
 from config.config import Config
 from game_definition.game import Game
@@ -15,29 +17,62 @@ class GameTrainer:
         self.config: Config = config
         self.game: Game = game
 
-    def _one_iteration(self) -> Tuple[List[torch.Tensor], List[torch.Tensor], int]:
-        empirical_p_list: List[torch.Tensor] = []
-        state_list: List[torch.Tensor] = []
-
-        self.game.start()
+    @staticmethod
+    def _one_iteration(
+        game: Game, module_initializer: Tuple, checkpoint_path: str, config: Config
+    ) -> Tuple[List[np.ndarray], List[np.ndarray], int, Any]:
+        empirical_p_list = []
+        state_list = []
+        rng = np.random.default_rng()
 
         with torch.no_grad():
-            mcts = MCTSController(self.game, self.model)
-            while not self.game.over:
-                mcts.simulate(self.config.train_playout_times)
+            model = module_initializer[0](*module_initializer[1:])
+            model.load_state_dict(torch.load(checkpoint_path, map_location=torch.device("cpu"))["state_dict"])
+            mcts = MCTSController(game, model)
+            while not game.over:
+                mcts.simulate(config.train_playout_times)
                 empirical_p_list.append(mcts.empirical_probability)
-                state_list.append(self.game.game_state)
+                state_list.append(game.game_state)
 
-                sampled_move = int(mcts.empirical_probability.multinomial(1).item())
-                self.game.make_move(sampled_move)
+                sampled_move = rng.choice(
+                    game.number_possible_moves,
+                    p=mcts.empirical_probability
+                )
+                game.make_move(sampled_move)
                 mcts.confirm_move(sampled_move)
 
-        return state_list, empirical_p_list, self.game.score
+        return state_list, empirical_p_list, game.score, game.intermediate_data
 
     def train(self) -> None:
         for _ in range(self.config.train_iterations):
-            loss = self.model.train_game(*self._one_iteration())
-            self.model.game_count += 1
-            self.model.epoch_count += 1
-            self.model.save_model(loss)
-            print(f"epoch {self.model.epoch_count}, game {self.model.game_count}, loss {loss.item()}")
+            self.game.start()
+            with mp.Pool() as pool:
+                iterable = pool.starmap(
+                    GameTrainer._one_iteration,
+                    (
+                        (
+                            self.game,
+                            self.model.module_initializer,
+                            self.model.checkpoint_path,
+                            self.config
+                        ) for _ in range(self.config.mcts_batch_size)
+                    ),
+                    chunksize=self.config.mcts_batch_chunksize
+                )
+                (
+                    state_list_iterable,
+                    empirical_p_list_iterable,
+                    score_iterable,
+                    intermediate_data_iterable
+                ) = zip(*iterable)
+                loss = self.model.train_game(
+                    state_list_iterable,  # type: ignore
+                    empirical_p_list_iterable,  # type: ignore
+                    score_iterable  # type: ignore
+                )
+                self.model.game_count += self.config.mcts_batch_size
+                self.model.epoch_count += 1
+                self.model.save_model(loss)
+                print(f"epoch {self.model.epoch_count}, game {self.model.game_count}, loss {loss.item()}")
+                self.game.collect_intermediate_data(intermediate_data_iterable)
+                self.game.save_intermediate_data()

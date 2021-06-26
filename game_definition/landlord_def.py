@@ -2,11 +2,10 @@ import random
 import itertools
 import pickle
 from enum import Enum
-from typing import Iterable, Dict, Tuple, List, Type, Union
+from typing import Iterable, Dict, Tuple, List
 from multiprocessing import Manager, Process
 
 import numpy as np
-import torch
 
 from game_definition.game import Game
 from game_definition.landlord.move import (
@@ -48,8 +47,8 @@ class Landlord(Game):
         self.internal_moves: List[MoveInternal] = []
         self.internal_moves_back_ref: Dict[MoveInternal, int] = {}
         self.moves: List[Tuple[int, PlayerRole]] = []
-        self.played = torch.zeros((3, 15), dtype=torch.int64)
-        self.hands = torch.zeros((3, 15), dtype=torch.int64)
+        self.played = np.zeros((3, 15), dtype=int)
+        self.hands = np.zeros((3, 15), dtype=int)
         self.current_role: PlayerRole = PlayerRole.LANDLORD
         self.moves_bin = moves_bin
         self.valid_moves_bin = valid_moves_bin
@@ -73,13 +72,13 @@ class Landlord(Game):
             self.recompute_moves()
 
     @staticmethod
-    def _init_hands() -> torch.Tensor:
+    def _init_hands() -> np.ndarray:
         deck = random.sample(range(54), 54)
-        return torch.tensor((
+        return np.array((
             Landlord._convert_cards(deck[:20]),
             Landlord._convert_cards(deck[20: 37]),
             Landlord._convert_cards(deck[37:])
-        ), dtype=torch.int64)
+        ), dtype=int)
 
     @staticmethod
     def _convert_cards(cards: Iterable[int]) -> List[int]:
@@ -89,70 +88,70 @@ class Landlord(Game):
         return hand
 
     @staticmethod
-    def _add_simple_combinations(moves: List[Tuple[Union[Type[MoveInternal], int], ...]]) -> None:
+    def _add_simple_combinations(moves: List[MoveInternal]) -> None:
         # skip turn
-        moves.append((Skip,))
+        moves.append(Skip())
         # single card
         for i in range(15):
-            moves.append((Single, i))
+            moves.append(Single(i))
         # double cards
         for i in range(13):
-            moves.append((Double, i))
+            moves.append(Double(i))
         # triple cards
         for i in range(13):
-            moves.append((Triple, i))
+            moves.append(Triple(i))
         # four cards
         for i in range(13):
-            moves.append((Four, i))
-            moves.append((ThreePlusOne, i, i))
+            moves.append(Four(i))
+            moves.append(ThreePlusOne(i, i))
         for i, j in itertools.permutations(range(13), 2):
             # 3 + 1
-            moves.append((ThreePlusOne, i, j))
+            moves.append(ThreePlusOne(i, j))
             # 3 + 2
-            moves.append((ThreePlusTwo, i, j))
+            moves.append(ThreePlusTwo(i, j))
         for i in range(13):
             # 3 + gray joker
-            moves.append((ThreePlusOne, i, 13))
+            moves.append(ThreePlusOne(i, 13))
             # 3 + color joker
-            moves.append((ThreePlusOne, i, 14))
+            moves.append(ThreePlusOne(i, 14))
         # double joker
-        moves.append((DoubleJoker,))
+        moves.append(DoubleJoker())
 
     @staticmethod
-    def _add_four_card_combinations(moves: List[Tuple[Union[Type[MoveInternal], int, Tuple[int, int]], ...]]) -> None:
+    def _add_four_card_combinations(moves: List[MoveInternal]) -> None:
         # 4 + 2
         for i in range(13):
             # 4 + 1 + 1
             for j, k in itertools.combinations(itertools.chain(range(i), range(i + 1, 15)), 2):  # type: ignore
-                moves.append((FourPlusTwo, i, (j, k)))
+                moves.append(FourPlusTwo(i, (j, k)))
             # 4 + 2
             for j in itertools.chain(range(i), range(i + 1, 13)):
-                moves.append((FourPlusTwo, i, (j, j)))
+                moves.append(FourPlusTwo(i, (j, j)))
         # 4 + 2 + 2
         for i in range(13):
             for j, k in itertools.combinations_with_replacement(  # type: ignore
                 itertools.chain(range(i), range(i + 1, 13)),
                 2
             ):
-                moves.append((FourPlusTwoPairs, i, (j, k)))
+                moves.append(FourPlusTwoPairs(i, (j, k)))
 
     @staticmethod
-    def _add_straight_combinations(moves: List[Tuple[Union[Type[MoveInternal], int], ...]]) -> None:
+    def _add_straight_combinations(moves: List[MoveInternal]) -> None:
         # straight
         for i in range(9):
             for j in range(5, 13 - i):
-                moves.append((Straight, i, i + j - 1))
+                moves.append(Straight(i, i + j - 1))
         # double straight
         for i in range(10):
             for j in range(3, min(13 - i, 11)):
-                moves.append((DoubleStraight, i, i + j - 1))
+                moves.append(DoubleStraight(i, i + j - 1))
         # triple straight
         for i in range(11):
             for j in range(2, min(13 - i, 7)):
-                moves.append((TripleStraight, i, i + j - 1))
+                moves.append(TripleStraight(i, i + j - 1))
 
     @staticmethod
-    def _add_airplane_combinations(moves: List[Tuple[Union[Type[MoveInternal], int, np.ndarray], ...]]) -> None:
+    def _add_airplane_combinations(moves: List[MoveInternal]) -> None:
         # straight 3 + 1s
         for i in range(11):
             for j in range(2, min(13 - i, 6)):
@@ -164,7 +163,7 @@ class Landlord(Game):
                         np.repeat(np.array([3, 1], dtype=int), j)
                     )
                     if np.max(array) <= 4 and array[13] <= 1 and array[14] <= 1:
-                        moves.append((TripleStraightPlusOnes, i, i + j - 1, array))
+                        moves.append(TripleStraightPlusOnes(i, i + j - 1, array))
         # straight 3 + 2s
         for i in range(11):
             for j in range(2, min(13 - i, 5)):
@@ -179,16 +178,7 @@ class Landlord(Game):
                         np.repeat(np.array([3, 2], dtype=int), j)
                     )
                     if np.max(array) <= 4:
-                        moves.append((TripleStraightPlusTwos, i, i + j - 1, array))
-
-    @staticmethod
-    def _transform_args_to_move(
-        move: Tuple[Union[Type[MoveInternal], int, np.ndarray, Tuple[int, int]], ...]
-    ) -> MoveInternal:
-        move_class = move[0]
-        if move_class in (TripleStraightPlusOnes, TripleStraightPlusTwos):
-            return move_class(*move[1: -1], torch.from_numpy(move[-1]))  # type: ignore
-        return move_class(*move[1:])  # type: ignore
+                        moves.append(TripleStraightPlusTwos(i, i + j - 1, array))
 
     def recompute_moves(self) -> None:
         # pylint: disable=too-many-branches
@@ -207,7 +197,7 @@ class Landlord(Game):
                 process.join()
 
             # remove possible duplicates
-            self.internal_moves = list(set(map(Landlord._transform_args_to_move, moves)))
+            self.internal_moves = list(set(moves))
             self.internal_moves_back_ref = {move: index for index, move in enumerate(self.internal_moves)}
 
         print("Storing Landlord moves data")
@@ -218,7 +208,7 @@ class Landlord(Game):
 
     def start(self) -> None:
         self.moves = []
-        self.played = torch.zeros((3, 15), dtype=torch.int64)
+        self.played = np.zeros((3, 15), dtype=int)
         self.hands = Landlord._init_hands()
         self.current_role = PlayerRole.LANDLORD
 
@@ -227,8 +217,8 @@ class Landlord(Game):
         return len(self.internal_moves)
 
     @staticmethod
-    def hand_contains_move(hand: torch.Tensor, move: MoveInternal) -> torch.Tensor:
-        return torch.all(hand >= move.cards)
+    def hand_contains_move(hand: np.ndarray, move: MoveInternal) -> bool:
+        return np.all(hand >= move.cards)  # type: ignore
 
     def _compute_valid_move(self, move_index: int) -> List[int]:
         # pylint: disable=too-many-branches, too-many-locals, too-many-statements
@@ -300,13 +290,13 @@ class Landlord(Game):
             start, end = last_move.range
             for i in range(end - start + 1, 12 - end):
                 for j in itertools.combinations_with_replacement(range(15), end - start + 1):  # type: ignore
-                    array = torch.index_put(
-                        torch.zeros(15, dtype=torch.int64),
-                        (torch.tensor(tuple(range(start + i, end + i + 1)) + j),),  # type: ignore
-                        torch.tensor((3, 1), dtype=torch.int64).repeat_interleave(end - start + 1),
-                        accumulate=True
+                    array = np.zeros(15, dtype=int)
+                    np.add.at(
+                        array,
+                        list(range(start + i, end + i + 1)) + list(j),  # type: ignore
+                        np.repeat(np.array([3, 1]), end - start + 1)
                     )
-                    if torch.max(array) <= 4 and array[13] <= 1 and array[14] <= 1:
+                    if np.max(array) <= 4 and array[13] <= 1 and array[14] <= 1:
                         moves.add(self.internal_moves_back_ref[TripleStraightPlusOnes(
                             start + i,
                             end + i,
@@ -319,13 +309,13 @@ class Landlord(Game):
                     itertools.chain(range(start), range(end + i + 1, 13)),
                     end - start + 1
                 ):
-                    array = torch.index_put(
-                        torch.zeros(15, dtype=torch.int64),
-                        (torch.tensor(tuple(range(start + i, end + i + 1)) + j),),  # type: ignore
-                        torch.tensor((3, 2), dtype=torch.int64).repeat_interleave(end - start + 1),
-                        accumulate=True
+                    array = np.zeros(15, dtype=int)
+                    np.add.at(
+                        array,
+                        list(range(start + i, end + i + 1)) + list(j),  # type: ignore
+                        np.repeat(np.array([3, 2]), end - start + 1)
                     )
-                    if torch.max(array) <= 4:
+                    if np.max(array) <= 4:
                         moves.add(self.internal_moves_back_ref[TripleStraightPlusTwos(
                             start + i,
                             end + i,
@@ -405,28 +395,25 @@ class Landlord(Game):
         return 5, 16
 
     @property
-    def game_state(self) -> torch.Tensor:
-        state = torch.vstack((
+    def game_state(self) -> np.ndarray:
+        state = np.vstack((
             self.played,
             self.hands[self.current_role.value]
         ))
         if not self.moves or self.moves[-1][1] == self.current_role:
-            cards_on_field = torch.zeros(15, dtype=torch.int64)
+            cards_on_field = np.zeros(15, dtype=int)
         else:
             cards_on_field = self.internal_moves[self.moves[-1][0]].cards
-        state = torch.vstack((state, cards_on_field.unsqueeze(0)))
+        state = np.vstack((state, cards_on_field))
 
-        role_col = torch.index_put(
-            torch.zeros(5, dtype=torch.int64),
-            (torch.tensor(self.current_role.value),),
-            torch.tensor(1, dtype=torch.int64)
-        ).unsqueeze(1)
+        role_col = np.zeros(5, dtype=int)
+        role_col[self.current_role.value] = 1
 
-        return torch.hstack((state, role_col))
+        return np.hstack((state, np.expand_dims(role_col, 1)))
 
     @property
     def over(self) -> bool:
-        return torch.any(torch.all(self.hands == 0, dim=1))  # type: ignore
+        return np.any(np.all(self.hands == 0, axis=1))  # type: ignore
 
     @property
     def score(self) -> int:
@@ -441,3 +428,21 @@ class Landlord(Game):
     def save_valid_moves(self) -> None:
         with open(self.valid_moves_bin, "wb") as file:
             pickle.dump(self.valid_moves, file)
+
+    def save_intermediate_data(self) -> None:
+        self.save_valid_moves()
+
+    @property
+    def intermediate_data(self) -> List[List[int]]:
+        return self.valid_moves
+
+    def collect_intermediate_data(self, valid_moves_iterable: Iterable[List[List[int]]]) -> None:
+        # pylint: disable=arguments-differ
+        valid_moves_tuple = tuple(valid_moves_iterable)
+        for i, moves in enumerate(self.valid_moves):
+            if not moves:
+                try:
+                    # pylint: disable=cell-var-from-loop
+                    self.valid_moves[i] = next(filter(lambda x: x, map(lambda x: x[i], valid_moves_tuple)))
+                except StopIteration:
+                    pass
