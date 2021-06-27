@@ -1,4 +1,5 @@
 import argparse
+import multiprocessing as mp
 
 import torch
 import torch.cuda
@@ -27,6 +28,7 @@ if __name__ == "__main__":
     config: Config = Config()
 
     if args.name == "landlord":
+        mp.set_start_method("spawn", force=True)
         MOVES_BIN = "data/landlord/moves.bin"
         VALID_MOVES_BIN = "data/landlord/valid_moves.bin"
         CHECKPOINT_PT = "data/landlord/model.pt"

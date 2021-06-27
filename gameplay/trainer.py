@@ -1,7 +1,7 @@
+import multiprocessing as mp
 from typing import List, Tuple, Any
 
 import torch
-import torch.multiprocessing as mp
 import numpy as np
 
 from config.config import Config
@@ -73,6 +73,6 @@ class GameTrainer:
                 self.model.game_count += self.config.mcts_batch_size
                 self.model.epoch_count += 1
                 self.model.save_model(loss)
-                print(f"epoch {self.model.epoch_count}, game {self.model.game_count}, loss {loss.item()}")
+                print(f"epoch {self.model.epoch_count}, game {self.model.game_count}, loss {loss}")
                 self.game.collect_intermediate_data(intermediate_data_iterable)
                 self.game.save_intermediate_data()

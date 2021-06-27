@@ -23,7 +23,6 @@ class Model:
         self._checkpoint_path = checkpoint_path
         self.game_count = 0
         self.epoch_count = 0
-        self.save_model(torch.tensor(0))
 
     def _loss_fn(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
         return (
@@ -44,7 +43,7 @@ class Model:
         state_list_iterable: Iterable[List[np.ndarray]],
         empirical_p_list_iterable: Iterable[List[np.ndarray]],
         empirical_v_iterable: Iterable[int]
-    ) -> torch.Tensor:
+    ) -> float:
         model_input = torch.from_numpy(
             np.stack(tuple(itertools.chain.from_iterable(state_list_iterable)))
         ).unsqueeze(1).float().to(self.device)
@@ -66,9 +65,9 @@ class Model:
         loss.backward()
         self.optimizer.step()
 
-        return loss.detach().cpu()
+        return loss.item()  # type: ignore
 
-    def save_model(self, loss: torch.Tensor) -> None:
+    def save_model(self, loss: float) -> None:
         torch.save(
             {
                 "epoch": self.epoch_count,
@@ -94,5 +93,7 @@ class Model:
             return
         self.epoch_count = checkpoint.get("epoch", 0)
         self.game_count = checkpoint.get("game", 0)
+        loss = checkpoint.get("loss", 0)
+        print(f"Load last model, epoch {self.epoch_count}, game {self.game_count}, loss {loss}")
         self.module.load_state_dict(checkpoint["state_dict"])
         self.optimizer.load_state_dict(checkpoint["optim_state_dict"])
