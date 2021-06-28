@@ -1,5 +1,6 @@
 import multiprocessing as mp
 from typing import List, Tuple, Any
+from os.path import isfile
 
 import torch
 import numpy as np
@@ -43,7 +44,10 @@ class GameTrainer:
 
         return state_list, empirical_p_list, game.score, game.intermediate_data
 
-    def train(self) -> None:
+    def train(self, variable_state_dim: bool) -> None:
+        # Initialize model for other processes to access in case the file does not exist
+        if not isfile(self.model.checkpoint_path):
+            self.model.save_model(0)
         for _ in range(self.config.train_iterations):
             self.game.start()
             with mp.Pool() as pool:
@@ -68,7 +72,8 @@ class GameTrainer:
                 loss = self.model.train_game(
                     state_list_iterable,  # type: ignore
                     empirical_p_list_iterable,  # type: ignore
-                    score_iterable  # type: ignore
+                    score_iterable,  # type: ignore
+                    variable_state_dim
                 )
                 self.model.game_count += self.config.mcts_batch_size
                 self.model.epoch_count += 1
