@@ -32,7 +32,7 @@ class Model:
     ) -> torch.Tensor:
         cumulative_game_sizes = itertools.accumulate(game_sizes)
         start = 0
-        loss = torch.tensor(0, dtype=torch.float32)
+        loss = torch.tensor(0, dtype=torch.float32, device=self.device)
         for end in cumulative_game_sizes:
             loss += (
                 self.mse_loss(pred[start: end, -1], target[start: end, - 1])
@@ -59,7 +59,7 @@ class Model:
     ) -> float:
         # pylint: disable=too-many-locals
         if variable_state_dim:
-            total_loss = torch.tensor(0, dtype=torch.float32)
+            total_loss = torch.tensor(0, dtype=torch.float32, device=self.device)
             batch_count = 0
             for (
                 state_list,
@@ -70,7 +70,7 @@ class Model:
                 empirical_p_list_iterable,
                 empirical_v_iterable
             ):
-                per_game_loss = torch.tensor(0, dtype=torch.float32)
+                per_game_loss = torch.tensor(0, dtype=torch.float32, device=self.device)
                 for state, empirical_p in zip(state_list, empirical_p_list):
                     model_input = torch.from_numpy(state).unsqueeze(0).unsqueeze(0).float().to(self.device)
                     model_output = torch.from_numpy(
