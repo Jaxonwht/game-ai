@@ -14,6 +14,7 @@ class StateNode:
         self.value = p_v_tuple[-1]
         self.state = state
         self.visit_count = 0
+        self.children_visit_count = 0
         self.value_sum: float = 0
         self.children: Dict[int, StateNode] = {}
 
@@ -62,10 +63,14 @@ class MCTSController:
                 self.game.undo_move(move)
 
         for move, child_node in node.children.items():
-            child_node_val = child_node.value_sum if desire_positive_score else -child_node.value_sum
+            if not child_node.visit_count:
+                child_node_val: float = 0
+            else:
+                child_node_val = child_node.value_sum if desire_positive_score else -child_node.value_sum
+                child_node_val /= child_node.visit_count
             child_u = (
                 child_node_val
-                + node.probability[move] * np.sqrt(node.visit_count) / (1 + child_node.visit_count)
+                + node.probability[move] * np.sqrt(node.children_visit_count) / (1 + child_node.visit_count)
             )
             if child_u > max_u:
                 max_u, best_move = child_u, move
@@ -75,5 +80,6 @@ class MCTSController:
         self.game.undo_move(best_move)
 
         node.value_sum += next_val
+        node.children_visit_count += 1
         node.visit_count += 1
         return next_val

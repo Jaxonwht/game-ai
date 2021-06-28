@@ -1,4 +1,4 @@
-train_playout_times: 10
+train_playout_times: 1000
 train_iterations: 1000
 learning_rate: 1.0e-3
 mcts_batch_size: 8
