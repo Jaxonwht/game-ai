@@ -11,7 +11,7 @@ class Game(ABC):
 
     @property
     @abstractmethod
-    def state_dimension(self) -> Tuple[int, int]:
+    def state_dimension(self) -> Tuple[int, ...]:
         pass
 
     @property

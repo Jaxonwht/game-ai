@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 
+from config.config import Config
 from game_definition.game import Game
 
 
@@ -20,9 +21,10 @@ class StateNode:
 
 
 class MCTSController:
-    def __init__(self, game: Game, model: nn.Module) -> None:
+    def __init__(self, game: Game, model: nn.Module, config: Config) -> None:
         self.game: Game = game
         self.model = model
+        self.config = config
         self.root = StateNode(game.game_state, self._predict(game.game_state))
 
     @property
@@ -70,7 +72,9 @@ class MCTSController:
                 child_node_val /= child_node.visit_count
             child_u = (
                 child_node_val
-                + node.probability[move] * np.sqrt(node.children_visit_count) / (1 + child_node.visit_count)
+                + self.config.explore_constant
+                * node.probability[move]
+                * np.sqrt(node.children_visit_count) / (1 + child_node.visit_count)
             )
             if child_u > max_u:
                 max_u, best_move = child_u, move

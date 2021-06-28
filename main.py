@@ -24,8 +24,14 @@ if __name__ == "__main__":
         action="store_true",
         help="Retrain and overwrite checkpoint pt file"
     )
+    parser.add_argument(
+        "--explore_constant",
+        default=1.0,
+        type=float,
+        help="The exploratory constant used in MCTS"
+    )
     args = parser.parse_args()
-    config: Config = Config()
+    config: Config = Config(vars(args))
 
     if args.name == "landlord":
         mp.set_start_method("spawn", force=True)

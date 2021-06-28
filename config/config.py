@@ -1,11 +1,14 @@
+from typing import Any, Dict
+
 from yaml import load, CLoader
 
 
 class Config:
-    def __init__(self) -> None:
+    def __init__(self, args: Dict[str, Any]) -> None:
         self.data = {}
         with open("config/config.yml", "r") as stream:
             self.data = load(stream, Loader=CLoader)
+        self.data.update(args)
 
     @property
     def train_playout_times(self) -> int:
@@ -26,3 +29,7 @@ class Config:
     @property
     def mcts_batch_chunksize(self) -> int:
         return self.data.get("mcts_batch_chunksize", 1)
+
+    @property
+    def explore_constant(self) -> float:
+        return self.data.get("explore_constant", 1)

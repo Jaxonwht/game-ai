@@ -28,7 +28,7 @@ class GameTrainer:
         with torch.no_grad():
             model = module_initializer[0](*module_initializer[1:])
             model.load_state_dict(torch.load(checkpoint_path, map_location=torch.device("cpu"))["state_dict"])
-            mcts = MCTSController(game, model)
+            mcts = MCTSController(game, model, config)
             while not game.over:
                 mcts.simulate(config.train_playout_times)
                 empirical_p_list.append(mcts.empirical_probability)
