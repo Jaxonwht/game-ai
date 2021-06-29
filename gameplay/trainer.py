@@ -20,16 +20,17 @@ class GameTrainer:
 
     @staticmethod
     def _one_iteration(
-        game: Game, module_initializer: Tuple, checkpoint_path: str, config: Config
+        game: Game, module_initializer: Tuple, checkpoint_path: str, config: Config, device_str: str
     ) -> Tuple[List[np.ndarray], List[np.ndarray], int, Any]:
         empirical_p_list = []
         state_list = []
         rng = np.random.default_rng()
+        device = torch.device(device_str)
 
         with torch.no_grad():
-            model = module_initializer[0](*module_initializer[1:])
-            model.load_state_dict(torch.load(checkpoint_path, map_location=torch.device("cpu"))["state_dict"])
-            mcts = MCTSController(game, model, config)
+            model = module_initializer[0](*module_initializer[1:]).to(device)
+            model.load_state_dict(torch.load(checkpoint_path, map_location=device)["state_dict"])
+            mcts = MCTSController(game, model, config, device)
             while not game.over:
                 mcts.simulate(config.train_playout_times)
                 empirical_p_list.append(mcts.empirical_probability)
@@ -58,7 +59,8 @@ class GameTrainer:
                             self.game,
                             self.model.module_initializer,
                             self.model.checkpoint_path,
-                            self.config
+                            self.config,
+                            self.model.device_str
                         ) for _ in range(self.config.mcts_batch_size)
                     ),
                     chunksize=self.config.mcts_batch_chunksize

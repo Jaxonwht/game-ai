@@ -21,10 +21,11 @@ class StateNode:
 
 
 class MCTSController:
-    def __init__(self, game: Game, model: nn.Module, config: Config) -> None:
+    def __init__(self, game: Game, model: nn.Module, config: Config, device: torch.device) -> None:
         self.game: Game = game
         self.model = model
         self.config = config
+        self.device = device
         self.root = StateNode(game.game_state, self._predict(game.game_state))
 
     @property
@@ -41,7 +42,9 @@ class MCTSController:
             self._search(self.root)
 
     def _predict(self, state: np.ndarray) -> np.ndarray:
-        return self.model(torch.from_numpy(np.expand_dims(state, (0, 1))).float()).squeeze(0).numpy()
+        return self.model(
+            torch.from_numpy(np.expand_dims(state, (0, 1))).float().to(self.device)
+        ).squeeze(0).detach().cpu().numpy()
 
     def _search(self, node: StateNode) -> Union[int, float]:
         if self.game.over:

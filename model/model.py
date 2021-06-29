@@ -43,6 +43,10 @@ class Model:
         return loss / len(game_sizes)
 
     @property
+    def device_str(self) -> str:
+        return str(self.device)
+
+    @property
     def module_initializer(self) -> Tuple:
         return self._module_initializer
 
