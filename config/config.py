@@ -33,3 +33,7 @@ class Config:
     @property
     def explore_constant(self) -> float:
         return self.data.get("explore_constant", 1)
+
+    @property
+    def mcts_depth_cap(self) -> int:
+        return self.data.get("mcts_depth_cap", -1)

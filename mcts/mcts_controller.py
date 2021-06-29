@@ -41,21 +41,22 @@ class MCTSController:
 
     def simulate(self, count: int) -> None:
         for _ in range(count):
-            self._search(self.root)
+            self._search(self.root, self.config.mcts_depth_cap)
 
     def _predict(self, state: np.ndarray) -> torch.Tensor:
         return self.model(
             torch.from_numpy(np.expand_dims(state, (0, 1))).float().to(self.device)
         ).squeeze(0).detach().cpu()
 
-    def _search(self, node: StateNode) -> Union[int, torch.Tensor]:
+    def _search(self, node: StateNode, depth_cap: int) -> Union[int, torch.Tensor]:
         if self.game.over:
             node.visit_count += 1
+            node.value_sum += self.game.score
             return self.game.score
 
-        if node.visit_count == 0:
+        if node.visit_count == 0 and depth_cap <= 0:
             node.value_sum += node.value
-            node.visit_count += 1
+            node.visit_count = 1
             return node.value
 
         desire_positive_score = self.game.desire_positive_score
@@ -85,7 +86,7 @@ class MCTSController:
                 max_u, best_move = child_u, move
 
         self.game.make_move(best_move)
-        next_val = self._search(node.children[best_move])
+        next_val = self._search(node.children[best_move], depth_cap - 1)
         self.game.undo_move(best_move)
 
         node.value_sum += next_val
