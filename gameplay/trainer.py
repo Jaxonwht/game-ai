@@ -21,10 +21,9 @@ class GameTrainer:
     @staticmethod
     def _one_iteration(
         game: Game, module: nn.Module, config: Config, device: torch.device
-    ) -> Tuple[List[np.ndarray], List[np.ndarray], int, Any]:
+    ) -> Tuple[List[np.ndarray], List[torch.Tensor], int, Any]:
         empirical_p_list = []
         state_list = []
-        rng = np.random.default_rng()
 
         with torch.no_grad():
             mcts = MCTSController(game, module, config, device)
@@ -33,12 +32,9 @@ class GameTrainer:
                 empirical_p_list.append(mcts.empirical_probability)
                 state_list.append(game.game_state)
 
-                sampled_move = rng.choice(
-                    game.number_possible_moves,
-                    p=mcts.empirical_probability
-                )
-                game.make_move(sampled_move)
-                mcts.confirm_move(sampled_move)
+                sampled_move = mcts.empirical_probability.multinomial(1).item()
+                game.make_move(sampled_move)  # type: ignore
+                mcts.confirm_move(sampled_move)  # type: ignore
 
         return state_list, empirical_p_list, game.score, game.intermediate_data
 

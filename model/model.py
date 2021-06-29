@@ -53,7 +53,7 @@ class Model:
     def train_game(
         self,
         state_list_iterable: Iterable[List[np.ndarray]],
-        empirical_p_list_iterable: Iterable[List[np.ndarray]],
+        empirical_p_list_iterable: Iterable[List[torch.Tensor]],
         empirical_v_iterable: Iterable[int],
         variable_state_dim: bool
     ) -> float:
@@ -73,9 +73,7 @@ class Model:
                 per_game_loss = torch.tensor(0, dtype=torch.float32, device=self.device)
                 for state, empirical_p in zip(state_list, empirical_p_list):
                     model_input = torch.from_numpy(state).unsqueeze(0).unsqueeze(0).float().to(self.device)
-                    model_output = torch.from_numpy(
-                        np.hstack((empirical_p, empirical_v))
-                    ).unsqueeze(0).float().to(self.device)
+                    model_output = torch.hstack((empirical_p, torch.tensor(empirical_v))).unsqueeze(0).to(self.device)
 
                     pred = self.module(model_input)
                     per_game_loss += self._loss_fn(pred, model_output, (1,))
@@ -97,14 +95,10 @@ class Model:
         ).unsqueeze(1).float().to(self.device)
 
         p_v_iterable = zip(empirical_p_list_iterable, empirical_v_iterable)
-        model_output = torch.from_numpy(
-            np.vstack(tuple(
-                np.hstack((
-                    np.stack(p_list),
-                    np.expand_dims(np.tile(v, len(p_list)), 1)
-                )) for p_list, v in p_v_iterable
-            ))
-        ).float().to(self.device)
+        model_output = torch.vstack(tuple(
+            torch.hstack((torch.stack(p_list), torch.tensor(v).repeat(len(p_list)).unsqueeze(1)))
+            for p_list, v in p_v_iterable
+        )).to(self.device)
 
         pred = self.module(model_input)
         loss = self._loss_fn(pred, model_output, game_sizes)
