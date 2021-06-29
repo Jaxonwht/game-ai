@@ -1,8 +1,8 @@
 import multiprocessing as mp
 from typing import List, Tuple, Any
-from os.path import isfile
 
 import torch
+import torch.nn as nn
 import numpy as np
 
 from config.config import Config
@@ -20,17 +20,14 @@ class GameTrainer:
 
     @staticmethod
     def _one_iteration(
-        game: Game, module_initializer: Tuple, checkpoint_path: str, config: Config, device_str: str
+        game: Game, module: nn.Module, config: Config, device: torch.device
     ) -> Tuple[List[np.ndarray], List[np.ndarray], int, Any]:
         empirical_p_list = []
         state_list = []
         rng = np.random.default_rng()
-        device = torch.device(device_str)
 
         with torch.no_grad():
-            model = module_initializer[0](*module_initializer[1:]).to(device)
-            model.load_state_dict(torch.load(checkpoint_path, map_location=device)["state_dict"])
-            mcts = MCTSController(game, model, config, device)
+            mcts = MCTSController(game, module, config, device)
             while not game.over:
                 mcts.simulate(config.train_playout_times)
                 empirical_p_list.append(mcts.empirical_probability)
@@ -46,9 +43,6 @@ class GameTrainer:
         return state_list, empirical_p_list, game.score, game.intermediate_data
 
     def train(self, variable_state_dim: bool) -> None:
-        # Initialize model for other processes to access in case the file does not exist
-        if not isfile(self.model.checkpoint_path):
-            self.model.save_model(0)
         for _ in range(self.config.train_iterations):
             self.game.start()
             with mp.Pool() as pool:
@@ -57,10 +51,9 @@ class GameTrainer:
                     (
                         (
                             self.game,
-                            self.model.module_initializer,
-                            self.model.checkpoint_path,
+                            self.model.underlying_module,
                             self.config,
-                            self.model.device_str
+                            self.model.device
                         ) for _ in range(self.config.mcts_batch_size)
                     ),
                     chunksize=self.config.mcts_batch_chunksize
@@ -71,12 +64,14 @@ class GameTrainer:
                     score_iterable,
                     intermediate_data_iterable
                 ) = zip(*iterable)
+                self.model.underlying_module.train()
                 loss = self.model.train_game(
                     state_list_iterable,  # type: ignore
                     empirical_p_list_iterable,  # type: ignore
                     score_iterable,  # type: ignore
                     variable_state_dim
                 )
+                self.model.underlying_module.eval()
                 self.model.game_count += self.config.mcts_batch_size
                 self.model.epoch_count += 1
                 self.model.save_model(loss)

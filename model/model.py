@@ -2,6 +2,7 @@ import itertools
 from typing import Tuple, List, Iterable
 
 import torch
+import torch.nn as nn
 import numpy as np
 
 
@@ -9,20 +10,27 @@ class Model:
     # pylint: disable=too-many-instance-attributes
     def __init__(
         self,
-        module_initializer: Tuple,
+        module: nn.Module,
         learning_rate: float,
         device: torch.device,
         checkpoint_path: str
     ) -> None:
-        self.device = device
-        self._module_initializer = module_initializer
-        self.module = module_initializer[0](*module_initializer[1:]).to(self.device)
-        self.module.train()
+        self._device = device
+        self.module = module.to(self._device).share_memory()
+        self.module.eval()
         self.optimizer = torch.optim.Adam(self.module.parameters(), lr=learning_rate)
         self.mse_loss = torch.nn.MSELoss(reduction="mean")
         self._checkpoint_path = checkpoint_path
         self.game_count = 0
         self.epoch_count = 0
+
+    @property
+    def underlying_module(self) -> nn.Module:
+        return self.module
+
+    @property
+    def device(self) -> torch.device:
+        return self._device
 
     def _loss_fn(
         self,
@@ -41,18 +49,6 @@ class Model:
             )
             start = end
         return loss / len(game_sizes)
-
-    @property
-    def device_str(self) -> str:
-        return str(self.device)
-
-    @property
-    def module_initializer(self) -> Tuple:
-        return self._module_initializer
-
-    @property
-    def checkpoint_path(self) -> str:
-        return self._checkpoint_path
 
     def train_game(
         self,

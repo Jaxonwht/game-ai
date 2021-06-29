@@ -52,8 +52,7 @@ if __name__ == "__main__":
         row_size, col_size = landlord.state_dimension
         print("Initialize pytorch nn model")
         landlord_model: Model = Model(
-            (
-                LandLordNN,
+            LandLordNN(
                 10,
                 row_size,
                 col_size,
@@ -92,8 +91,7 @@ if __name__ == "__main__":
 
         print("Initialize pytorch nn model")
         landlord_v2_model = Model(
-            (
-                LandLordNNv2,
+            LandLordNNv2(
                 10,
                 row_size,
                 col_size,
