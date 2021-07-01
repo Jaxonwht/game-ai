@@ -38,7 +38,7 @@ class GameTrainer:
 
         return state_list, empirical_p_list, game.score, game.intermediate_data
 
-    def train(self, variable_state_dim: bool) -> None:
+    def train(self) -> None:
         for _ in range(self.config.train_iterations):
             self.game.start()
             with mp.Pool() as pool:
@@ -64,8 +64,7 @@ class GameTrainer:
                 loss = self.model.train_game(
                     state_list_iterable,  # type: ignore
                     empirical_p_list_iterable,  # type: ignore
-                    score_iterable,  # type: ignore
-                    variable_state_dim
+                    score_iterable  # type: ignore
                 )
                 self.model.underlying_module.eval()
                 self.model.game_count += self.config.mcts_batch_size

@@ -1,7 +1,7 @@
 train_playout_times: 10
-train_iterations: 1000
+train_iterations: 500
 learning_rate: 1.0e-3
 mcts_batch_size: 2
 mcts_batch_chunksize: 1
 explore_constant: 1
-mcts_depth_cap: 50
+mcts_depth_cap: 0

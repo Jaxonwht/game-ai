@@ -43,7 +43,7 @@ class PlayerRole(Enum):
 
 class Landlordv2(Game):
     # pylint: disable=too-many-instance-attributes
-    def __init__(self, moves_bin: str, valid_moves_bin: str, recompute_moves: bool) -> None:
+    def __init__(self, moves_bin: str, valid_moves_bin: str, recompute_moves: bool, history_size: int) -> None:
         self.internal_moves: List[MoveInternal] = []
         self.internal_moves_back_ref: Dict[MoveInternal, int] = {}
         self.moves: List[Tuple[int, PlayerRole]] = []
@@ -54,6 +54,7 @@ class Landlordv2(Game):
         self.moves_bin = moves_bin
         self.valid_moves_bin = valid_moves_bin
         self.valid_moves: List[List[int]] = []
+        self.history_size = history_size
         if recompute_moves:
             print("Does not load moves data from persistent storage")
             self.recompute_moves()
@@ -209,7 +210,7 @@ class Landlordv2(Game):
 
     def start(self) -> None:
         self.moves = []
-        self.moves_raw = [(self.internal_moves_back_ref[Skip()], PlayerRole(2))]
+        self.moves_raw = []
         self.played = np.zeros((3, 15), dtype=int)
         self.hands = Landlordv2._init_hands()
         self.current_role = PlayerRole.LANDLORD
@@ -397,7 +398,7 @@ class Landlordv2(Game):
     @property
     def state_dimension(self) -> Tuple[int, ...]:
         # Variable state dimension
-        return 5, 16
+        return 5, 16, self.history_size
 
     @property
     def game_state(self) -> np.ndarray:
@@ -415,13 +416,17 @@ class Landlordv2(Game):
         role_col[self.current_role.value] = 1
         state = np.hstack((state, np.expand_dims(role_col, 1)))
 
-        return np.vstack((
+        state = np.vstack((
             state,
             *(
                 np.concatenate((self.internal_moves[index].cards, np.array((role.value,))))
-                for index, role in self.moves_raw
+                for index, role in self.moves_raw[-self.history_size:]
             )
         ))
+
+        if state.shape[0] < 5 + self.history_size:
+            return np.pad(state, ((0, 5 + self.history_size - state.shape[0]), (0, 0)), "constant", constant_values=0)
+        return state
 
     @property
     def over(self) -> bool:
