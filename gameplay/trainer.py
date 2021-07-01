@@ -1,8 +1,7 @@
-from typing import List
-
 import torch
 import torch.nn as nn
 import torch.multiprocessing as mp
+import numpy.random as random
 
 from config.config import Config
 from game_definition.game import Game
@@ -23,7 +22,8 @@ class GameTrainer:
         module: nn.Module,
         device: torch.device,
         config: Config,
-        queue: mp.SimpleQueue
+        queue: mp.SimpleQueue,
+        rng: random.Generator
     ) -> None:
         # pylint: disable=too-many-arguments
         empirical_p_list = []
@@ -38,7 +38,7 @@ class GameTrainer:
                     empirical_p_list.append(mcts.empirical_probability)
                     state_list.append(game.game_state)
 
-                    sampled_move = mcts.empirical_probability.multinomial(1).item()
+                    sampled_move = rng.choice(game.number_possible_moves, p=mcts.empirical_probability)
                     game.make_move(sampled_move)  # type: ignore
                     mcts.confirm_move(sampled_move)  # type: ignore
 
@@ -48,7 +48,7 @@ class GameTrainer:
         queue: mp.SimpleQueue = mp.SimpleQueue()
         for _ in range(self.config.train_iterations):
             state_list_iterable = []
-            empirical_p_list_iterable: List[List[torch.Tensor]] = []
+            empirical_p_list_iterable = []
             score_iterable = []
             processes = (
                 mp.Process(
@@ -58,7 +58,8 @@ class GameTrainer:
                         self.model.underlying_module,
                         self.model.device,
                         self.config,
-                        queue
+                        queue,
+                        random.default_rng()
                     )
                 ) for _ in range(self.config.mcts_num_processes)
             )

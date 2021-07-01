@@ -53,7 +53,7 @@ class Model:
     def train_game(
         self,
         state_list_iterable: Iterable[List[np.ndarray]],
-        empirical_p_list_iterable: Iterable[List[torch.Tensor]],
+        empirical_p_list_iterable: Iterable[List[np.ndarray]],
         empirical_v_iterable: Iterable[int],
     ) -> float:
         game_sizes = tuple(len(state_list) for state_list in state_list_iterable)
@@ -61,12 +61,16 @@ class Model:
         model_input = torch.from_numpy(
             np.stack(tuple(itertools.chain.from_iterable(state_list_iterable)))
         ).unsqueeze(1).float().to(self.device)
+        print(model_input.dtype)
 
         p_v_iterable = zip(empirical_p_list_iterable, empirical_v_iterable)
-        model_output = torch.vstack(tuple(
-            torch.hstack((torch.stack(p_list), torch.tensor(v).repeat(len(p_list)).unsqueeze(1)))
+        model_output = torch.from_numpy(np.vstack(tuple(
+            np.hstack((np.stack(p_list), np.expand_dims(
+                np.repeat(np.array((v,), dtype=np.float32), len(p_list)), 1
+            )))
             for p_list, v in p_v_iterable
-        )).to(self.device)
+        ))).to(self.device)
+        print(model_output.dtype)
 
         pred = self.module(model_input)
         loss = self._loss_fn(pred, model_output, game_sizes)

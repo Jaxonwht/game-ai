@@ -28,12 +28,10 @@ class MCTSController:
         self.root = StateNode(self._predict(game.game_state))
 
     @property
-    def empirical_probability(self) -> torch.Tensor:
-        probability = torch.zeros(self.game.number_possible_moves, dtype=torch.int64)
-        probability[torch.tensor(tuple(self.root.children.keys()))] = torch.tensor(
-            tuple(x.visit_count for x in self.root.children.values()), dtype=torch.int64
-        )
-        return probability / probability.sum()
+    def empirical_probability(self) -> np.ndarray:
+        probability = np.zeros(self.game.number_possible_moves, dtype=int)
+        probability[list(self.root.children.keys())] = tuple((x.visit_count for x in self.root.children.values()))
+        return np.divide(probability, probability.sum(), dtype=np.float32)
 
     def confirm_move(self, move: int) -> None:
         self.root = self.root.children[move]
