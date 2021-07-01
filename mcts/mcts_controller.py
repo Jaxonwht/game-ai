@@ -10,10 +10,9 @@ from game_definition.game import Game
 
 class StateNode:
     # pylint: disable=too-few-public-methods
-    def __init__(self, state: np.ndarray, p_v_tuple: torch.Tensor) -> None:
+    def __init__(self, p_v_tuple: torch.Tensor) -> None:
         self.probability = p_v_tuple[:-1]
         self.value = p_v_tuple[-1]
-        self.state = state
         self.visit_count = 0
         self.children_visit_count = 0
         self.value_sum = torch.tensor(0, dtype=torch.float32)
@@ -26,7 +25,7 @@ class MCTSController:
         self.model = model
         self.config = config
         self.device = device
-        self.root = StateNode(game.game_state, self._predict(game.game_state))
+        self.root = StateNode(self._predict(game.game_state))
 
     @property
     def empirical_probability(self) -> torch.Tensor:
@@ -66,7 +65,7 @@ class MCTSController:
         if not node.children:
             for move in self.game.available_moves:
                 self.game.make_move(move)
-                child_node = StateNode(self.game.game_state, self._predict(self.game.game_state))
+                child_node = StateNode(self._predict(self.game.game_state))
                 node.children[move] = child_node
                 self.game.undo_move(move)
 
