@@ -1,8 +1,8 @@
 import argparse
-import multiprocessing as mp
 
 import torch
 import torch.cuda
+import torch.multiprocessing as mp
 
 from config.config import Config
 from game_definition.landlord_def import Landlord
