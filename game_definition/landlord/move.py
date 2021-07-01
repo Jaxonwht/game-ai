@@ -30,9 +30,9 @@ class MoveInternal(ABC):
 
     def __eq__(self, other) -> bool:
         return (
-            isinstance(other, MoveInternal) and
-            self.move_type == other.move_type and
-            np.all(self._cards == other.cards)
+            isinstance(other, MoveInternal) and  # type: ignore
+            self.move_type == other.move_type and  # type: ignore
+            np.all(self._cards == other.cards)  # type: ignore
         )
 
     def __hash__(self) -> int:
@@ -85,7 +85,7 @@ class Single(MoveInternal):
         return self.card
 
     @property
-    def range(self) -> int:
+    def range(self) -> Tuple[int, int]:
         raise NotImplementedError()
 
 
@@ -101,7 +101,7 @@ class Double(MoveInternal):
         return self.card
 
     @property
-    def range(self) -> int:
+    def range(self) -> Tuple[int, int]:
         raise NotImplementedError()
 
 
@@ -117,7 +117,7 @@ class Triple(MoveInternal):
         return self.card
 
     @property
-    def range(self) -> int:
+    def range(self) -> Tuple[int, int]:
         raise NotImplementedError()
 
 
@@ -133,7 +133,7 @@ class Four(MoveInternal):
         return self.card
 
     @property
-    def range(self) -> int:
+    def range(self) -> Tuple[int, int]:
         raise NotImplementedError()
 
 
@@ -149,7 +149,7 @@ class ThreePlusOne(MoveInternal):
         return self.three
 
     @property
-    def range(self) -> int:
+    def range(self) -> Tuple[int, int]:
         raise NotImplementedError()
 
 
@@ -165,7 +165,7 @@ class ThreePlusTwo(MoveInternal):
         return self.three
 
     @property
-    def range(self) -> int:
+    def range(self) -> Tuple[int, int]:
         raise NotImplementedError()
 
 
@@ -293,5 +293,5 @@ class DoubleJoker(MoveInternal):
         raise NotImplementedError()
 
     @property
-    def range(self) -> int:
+    def range(self) -> Tuple[int, int]:
         raise NotImplementedError()

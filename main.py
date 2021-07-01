@@ -64,8 +64,6 @@ if __name__ == "__main__":
         )
         if not args.retrain:
             landlord_model.load_model()
-        else:
-            landlord_model.save_model(0)
 
         print("Initialize game trainer")
         landlord_trainer: GameTrainer = GameTrainer(
@@ -75,7 +73,7 @@ if __name__ == "__main__":
         )
 
         print("Start training")
-        landlord_trainer.train(variable_state_dim=False)
+        landlord_trainer.train()
 
         print("Saving valid moves data for landlord")
         landlord.save_valid_moves()
@@ -85,9 +83,9 @@ if __name__ == "__main__":
         CHECKPOINT_PT = "data/landlord_v2/model.pt"
 
         print("Initialize landlord_v2 game")
-        landlord_v2 = Landlordv2(MOVES_BIN, VALID_MOVES_BIN, args.recompute_moves)
+        landlord_v2 = Landlordv2(MOVES_BIN, VALID_MOVES_BIN, args.recompute_moves, 50)
 
-        row_size, col_size = landlord_v2.state_dimension
+        row_size, col_size, history_size = landlord_v2.state_dimension
 
         print("Initialize pytorch nn model")
         landlord_v2_model = Model(
@@ -95,9 +93,8 @@ if __name__ == "__main__":
                 10,
                 row_size,
                 col_size,
-                50,
-                16,
-                landlord_v2.number_possible_moves + 1
+                history_size,
+                landlord_v2.number_possible_moves + 1,
             ),
             config.learning_rate,
             device,
@@ -105,8 +102,6 @@ if __name__ == "__main__":
         )
         if not args.retrain:
             landlord_v2_model.load_model()
-        else:
-            landlord_v2_model.save_model(0)
 
         print("Initialize game trainer")
         landlord_v2_trainer = GameTrainer(
@@ -116,7 +111,7 @@ if __name__ == "__main__":
         )
 
         print("Start training")
-        landlord_v2_trainer.train(variable_state_dim=True)
+        landlord_v2_trainer.train()
 
         print("Saving valid moves data for landlord_v2")
         landlord_v2.save_valid_moves()

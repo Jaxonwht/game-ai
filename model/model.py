@@ -55,39 +55,7 @@ class Model:
         state_list_iterable: Iterable[List[np.ndarray]],
         empirical_p_list_iterable: Iterable[List[torch.Tensor]],
         empirical_v_iterable: Iterable[int],
-        variable_state_dim: bool
     ) -> float:
-        # pylint: disable=too-many-locals
-        if variable_state_dim:
-            total_loss = torch.tensor(0, dtype=torch.float32, device=self.device)
-            batch_count = 0
-            for (
-                state_list,
-                empirical_p_list,
-                empirical_v
-            ) in zip(
-                state_list_iterable,
-                empirical_p_list_iterable,
-                empirical_v_iterable
-            ):
-                per_game_loss = torch.tensor(0, dtype=torch.float32, device=self.device)
-                for state, empirical_p in zip(state_list, empirical_p_list):
-                    model_input = torch.from_numpy(state).unsqueeze(0).unsqueeze(0).float().to(self.device)
-                    model_output = torch.hstack((empirical_p, torch.tensor(empirical_v))).unsqueeze(0).to(self.device)
-
-                    pred = self.module(model_input)
-                    per_game_loss += self._loss_fn(pred, model_output, (1,))
-                total_loss += per_game_loss / len(state_list)
-                batch_count += 1
-
-            total_loss /= batch_count
-
-            self.optimizer.zero_grad()
-            total_loss.backward()
-            self.optimizer.step()
-
-            return total_loss.item()
-
         game_sizes = tuple(len(state_list) for state_list in state_list_iterable)
 
         model_input = torch.from_numpy(
