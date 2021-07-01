@@ -23,12 +23,12 @@ class Config:
         return self.data.get("learning_rate", 1.0e-3)
 
     @property
-    def mcts_batch_size(self) -> int:
-        return self.data.get("mcts_batch_size", 2)
+    def mcts_num_games_per_process(self) -> int:
+        return self.data.get("mcts_num_games_per_iteration", 1)
 
     @property
-    def mcts_batch_chunksize(self) -> int:
-        return self.data.get("mcts_batch_chunksize", 1)
+    def mcts_num_processes(self) -> int:
+        return self.data.get("mcts_num_processes", 4)
 
     @property
     def explore_constant(self) -> float:

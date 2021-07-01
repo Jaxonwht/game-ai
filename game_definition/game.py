@@ -62,5 +62,5 @@ class Game(ABC):
         pass
 
     @abstractmethod
-    def collect_intermediate_data(self, data_iterable: Iterable) -> None:
+    def collect_intermediate_data(self, data_iterable: Any) -> None:
         pass

@@ -1,9 +1,8 @@
-import multiprocessing as mp
-from typing import List, Tuple, Any
+from typing import List
 
 import torch
 import torch.nn as nn
-import numpy as np
+import torch.multiprocessing as mp
 
 from config.config import Config
 from game_definition.game import Game
@@ -19,57 +18,71 @@ class GameTrainer:
         self.game: Game = game
 
     @staticmethod
-    def _one_iteration(
-        game: Game, module: nn.Module, config: Config, device: torch.device
-    ) -> Tuple[List[np.ndarray], List[torch.Tensor], int, Any]:
+    def _simulate_games(
+        game: Game,
+        module: nn.Module,
+        device: torch.device,
+        config: Config,
+        queue: mp.SimpleQueue
+    ) -> None:
+        # pylint: disable=too-many-arguments
         empirical_p_list = []
         state_list = []
 
-        with torch.no_grad():
-            mcts = MCTSController(game, module, config, device)
-            while not game.over:
-                mcts.simulate(config.train_playout_times)
-                empirical_p_list.append(mcts.empirical_probability)
-                state_list.append(game.game_state)
+        for _ in range(config.mcts_num_games_per_process):
+            with torch.no_grad():
+                game.start()
+                mcts = MCTSController(game, module, config, device)
+                while not game.over:
+                    mcts.simulate(config.train_playout_times)
+                    empirical_p_list.append(mcts.empirical_probability)
+                    state_list.append(game.game_state)
 
-                sampled_move = mcts.empirical_probability.multinomial(1).item()
-                game.make_move(sampled_move)  # type: ignore
-                mcts.confirm_move(sampled_move)  # type: ignore
+                    sampled_move = mcts.empirical_probability.multinomial(1).item()
+                    game.make_move(sampled_move)  # type: ignore
+                    mcts.confirm_move(sampled_move)  # type: ignore
 
-        return state_list, empirical_p_list, game.score, game.intermediate_data
+            queue.put((state_list, empirical_p_list, game.score, game.intermediate_data))
 
     def train(self) -> None:
+        queue: mp.SimpleQueue = mp.SimpleQueue()
         for _ in range(self.config.train_iterations):
-            self.game.start()
-            with mp.Pool() as pool:
-                iterable = pool.starmap(
-                    GameTrainer._one_iteration,
-                    (
-                        (
-                            self.game,
-                            self.model.underlying_module,
-                            self.config,
-                            self.model.device
-                        ) for _ in range(self.config.mcts_batch_size)
-                    ),
-                    chunksize=self.config.mcts_batch_chunksize
-                )
-                (
-                    state_list_iterable,
-                    empirical_p_list_iterable,
-                    score_iterable,
-                    intermediate_data_iterable
-                ) = zip(*iterable)
-                self.model.underlying_module.train()
-                loss = self.model.train_game(
-                    state_list_iterable,  # type: ignore
-                    empirical_p_list_iterable,  # type: ignore
-                    score_iterable  # type: ignore
-                )
-                self.model.underlying_module.eval()
-                self.model.game_count += self.config.mcts_batch_size
-                self.model.epoch_count += 1
-                self.model.save_model(loss)
-                print(f"epoch {self.model.epoch_count}, game {self.model.game_count}, loss {loss}")
-                self.game.collect_intermediate_data(intermediate_data_iterable)
+            state_list_iterable = []
+            empirical_p_list_iterable: List[List[torch.Tensor]] = []
+            score_iterable = []
+            processes = (
+                mp.Process(
+                    target=GameTrainer._simulate_games,
+                    args=(
+                        self.game,
+                        self.model.underlying_module,
+                        self.model.device,
+                        self.config,
+                        queue
+                    )
+                ) for _ in range(self.config.mcts_num_processes)
+            )
+            for process in processes:
+                process.start()
+            for _ in range(self.config.mcts_num_games_per_process * self.config.mcts_num_processes):
+                state_list, empirical_p_list, game_score, intermediate_data = queue.get()
+                self.model.game_count += 1
+                state_list_iterable.append(state_list)
+                empirical_p_list_iterable.append(empirical_p_list)
+                score_iterable.append(game_score)
+                self.game.collect_intermediate_data(intermediate_data)
                 self.game.save_intermediate_data()
+            for process in processes:
+                process.join()
+
+            self.model.underlying_module.train()
+            loss = self.model.train_game(
+                state_list_iterable,
+                empirical_p_list_iterable,
+                score_iterable
+            )
+            self.model.underlying_module.eval()
+
+            self.model.epoch_count += 1
+            self.model.save_model(loss)
+            print(f"epoch {self.model.epoch_count}, game {self.model.game_count}, loss {loss}")

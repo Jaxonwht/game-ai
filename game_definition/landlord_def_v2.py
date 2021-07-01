@@ -453,13 +453,8 @@ class Landlordv2(Game):
     def intermediate_data(self) -> List[List[int]]:
         return self.valid_moves
 
-    def collect_intermediate_data(self, valid_moves_iterable: Iterable[List[List[int]]]) -> None:
+    def collect_intermediate_data(self, additional_data: List[List[int]]) -> None:
         # pylint: disable=arguments-differ
-        valid_moves_tuple = tuple(valid_moves_iterable)
         for i, moves in enumerate(self.valid_moves):
-            if not moves:
-                try:
-                    # pylint: disable=cell-var-from-loop
-                    self.valid_moves[i] = next(filter(lambda x: x, map(lambda x: x[i], valid_moves_tuple)))
-                except StopIteration:
-                    pass
+            if not moves and additional_data[i]:
+                self.valid_moves[i] = additional_data[i]
