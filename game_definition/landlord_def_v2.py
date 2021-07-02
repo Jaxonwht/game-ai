@@ -422,7 +422,7 @@ class Landlordv2(Game):
         state = np.vstack((
             state,
             *(
-                np.concatenate((self.internal_moves[index].cards, np.array((role.value,))))
+                np.concatenate((self.internal_moves[index].cards, np.array((role.value + 1,))))
                 for index, role in self.moves_raw[-self.history_size:]
             )
         ))
