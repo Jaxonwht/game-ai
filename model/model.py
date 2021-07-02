@@ -61,7 +61,6 @@ class Model:
         model_input = torch.from_numpy(
             np.stack(tuple(itertools.chain.from_iterable(state_list_iterable)))
         ).unsqueeze(1).float().to(self.device)
-        print(model_input.dtype)
 
         p_v_iterable = zip(empirical_p_list_iterable, empirical_v_iterable)
         model_output = torch.from_numpy(np.vstack(tuple(
@@ -70,7 +69,6 @@ class Model:
             )))
             for p_list, v in p_v_iterable
         ))).to(self.device)
-        print(model_output.dtype)
 
         pred = self.module(model_input)
         loss = self._loss_fn(pred, model_output, game_sizes)

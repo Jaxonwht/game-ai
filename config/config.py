@@ -24,7 +24,7 @@ class Config:
 
     @property
     def mcts_num_games_per_process(self) -> int:
-        return self.data.get("mcts_num_games_per_iteration", 1)
+        return self.data.get("mcts_num_games_per_process", 1)
 
     @property
     def mcts_num_processes(self) -> int:
