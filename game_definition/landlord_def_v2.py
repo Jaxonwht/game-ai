@@ -406,14 +406,17 @@ class Landlordv2(Game):
             self.played,
             self.hands[self.current_role.value]
         ))
+        card_role = 0
         if not self.moves or self.moves[-1][1] == self.current_role:
             cards_on_field = np.zeros(15, dtype=int)
         else:
             cards_on_field = self.internal_moves[self.moves[-1][0]].cards
+            card_role = self.moves[-1][1].value + 1
         state = np.vstack((state, cards_on_field))
 
         role_col = np.zeros(5, dtype=int)
         role_col[self.current_role.value] = 1
+        role_col[4] = card_role
         state = np.hstack((state, np.expand_dims(role_col, 1)))
 
         state = np.vstack((
